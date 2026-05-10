@@ -12,6 +12,7 @@ import {
   User,
 } from 'lucide-react';
 import { useState } from 'react';
+import NotificationsBell from './NotificationsBell';
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
@@ -52,12 +53,15 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               </div>
               <span className="text-lg font-bold text-gray-900 dark:text-white">TaskForge</span>
             </Link>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden"
-            >
-              <X className="h-5 w-5 text-gray-500" />
-            </button>
+            <div className="flex items-center gap-2">
+              <NotificationsBell />
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="lg:hidden"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
           </div>
 
           {/* Navigation */}
@@ -120,7 +124,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             <Menu className="h-6 w-6 text-gray-600 dark:text-gray-400" />
           </button>
           <span className="font-semibold text-gray-900 dark:text-white">TaskForge</span>
-          <div className="w-6" />
+          <NotificationsBell />
         </header>
 
         {/* Page content */}

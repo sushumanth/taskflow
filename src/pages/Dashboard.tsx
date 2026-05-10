@@ -11,6 +11,8 @@ import {
   AlertTriangle,
   ListTodo,
   FolderKanban,
+  ClipboardCheck,
+  TrendingUp,
   ArrowRight,
   Calendar,
 } from 'lucide-react';
@@ -73,6 +75,20 @@ export default function Dashboard() {
       bg: 'bg-red-50 dark:bg-red-900/20',
     },
     {
+      title: 'Pending Reviews',
+      value: stats?.pendingReviews || 0,
+      icon: ClipboardCheck,
+      color: 'text-amber-600',
+      bg: 'bg-amber-50 dark:bg-amber-900/20',
+    },
+    {
+      title: 'Needs Attention',
+      value: stats?.tasksNeedingAttention || 0,
+      icon: AlertTriangle,
+      color: 'text-rose-600',
+      bg: 'bg-rose-50 dark:bg-rose-900/20',
+    },
+    {
       title: 'In Progress',
       value: stats?.inProgressTasks || 0,
       icon: LayoutDashboard,
@@ -86,6 +102,13 @@ export default function Dashboard() {
       color: 'text-indigo-600',
       bg: 'bg-indigo-50 dark:bg-indigo-900/20',
     },
+    {
+      title: 'Overall Progress',
+      value: `${stats?.overallProgress || 0}%`,
+      icon: TrendingUp,
+      color: 'text-emerald-600',
+      bg: 'bg-emerald-50 dark:bg-emerald-900/20',
+    },
   ];
 
   const getStatusBadge = (status: string) => {
@@ -94,6 +117,10 @@ export default function Dashboard() {
         return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Done</Badge>;
       case 'in-progress':
         return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">In Progress</Badge>;
+      case 'review':
+        return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">In Review</Badge>;
+      case 'rejected':
+        return <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100">Rejected</Badge>;
       default:
         return <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100">To Do</Badge>;
     }

@@ -18,12 +18,18 @@ export const createTask = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
+    if (assignedTo && !project.members.some((member: any) => member.toString() === assignedTo)) {
+      project.members.push(assignedTo);
+      await project.save();
+    }
+
     const task = await Task.create({
       title,
       description,
       projectId,
       assignedTo,
       status: 'todo',
+      progressPercent: 0,
       dueDate: new Date(dueDate),
     });
 
@@ -120,7 +126,7 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
 
     // Members can only update status, admins can update everything
     if (!isAdmin && isAssignee) {
-      if (status && ['todo', 'in-progress', 'done'].includes(status)) {
+      if (status && ['todo', 'in-progress', 'review', 'done', 'rejected'].includes(status)) {
         task.status = status;
       } else {
         res.status(403).json({ success: false, message: 'Members can only update task status' });
@@ -130,7 +136,7 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
       if (title) task.title = title;
       if (description !== undefined) task.description = description;
       if (assignedTo) task.assignedTo = assignedTo;
-      if (status && ['todo', 'in-progress', 'done'].includes(status)) {
+      if (status && ['todo', 'in-progress', 'review', 'done', 'rejected'].includes(status)) {
         task.status = status;
       }
       if (dueDate) task.dueDate = new Date(dueDate);

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { useAuth } from '../hooks/useAuth';
 import {
   getTasks,
@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import {
   Dialog,
   DialogContent,
@@ -58,7 +59,7 @@ import { toast } from 'sonner';
 import { format, isPast, isToday } from 'date-fns';
 
 export default function Tasks() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const projectFilter = searchParams.get('projectId') || '';
 
@@ -215,6 +216,10 @@ export default function Tasks() {
         return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Done</Badge>;
       case 'in-progress':
         return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">In Progress</Badge>;
+      case 'review':
+        return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">In Review</Badge>;
+      case 'rejected':
+        return <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100">Rejected</Badge>;
       default:
         return <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100">To Do</Badge>;
     }
@@ -366,7 +371,9 @@ export default function Tasks() {
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="todo">To Do</SelectItem>
             <SelectItem value="in-progress">In Progress</SelectItem>
+            <SelectItem value="review">Review</SelectItem>
             <SelectItem value="done">Done</SelectItem>
+            <SelectItem value="rejected">Rejected</SelectItem>
           </SelectContent>
         </Select>
         <Select
@@ -399,13 +406,16 @@ export default function Tasks() {
           <TabsTrigger value="all" onClick={() => setStatusFilter('all')}>All</TabsTrigger>
           <TabsTrigger value="todo" onClick={() => setStatusFilter('todo')}>To Do</TabsTrigger>
           <TabsTrigger value="in-progress" onClick={() => setStatusFilter('in-progress')}>In Progress</TabsTrigger>
+          <TabsTrigger value="review" onClick={() => setStatusFilter('review')}>Review</TabsTrigger>
           <TabsTrigger value="done" onClick={() => setStatusFilter('done')}>Done</TabsTrigger>
+          <TabsTrigger value="rejected" onClick={() => setStatusFilter('rejected')}>Rejected</TabsTrigger>
         </TabsList>
 
         <TabsContent value="all" className="m-0">
           <TaskList
             tasks={filteredTasks}
             isAdmin={isAdmin}
+            currentUserId={user?._id || user?.id || ''}
             getStatusBadge={getStatusBadge}
             getDueDateColor={getDueDateColor}
             onUpdateStatus={handleUpdateStatus}
@@ -417,6 +427,7 @@ export default function Tasks() {
           <TaskList
             tasks={filteredTasks.filter((t) => t.status === 'todo')}
             isAdmin={isAdmin}
+            currentUserId={user?._id || user?.id || ''}
             getStatusBadge={getStatusBadge}
             getDueDateColor={getDueDateColor}
             onUpdateStatus={handleUpdateStatus}
@@ -428,6 +439,7 @@ export default function Tasks() {
           <TaskList
             tasks={filteredTasks.filter((t) => t.status === 'in-progress')}
             isAdmin={isAdmin}
+            currentUserId={user?._id || user?.id || ''}
             getStatusBadge={getStatusBadge}
             getDueDateColor={getDueDateColor}
             onUpdateStatus={handleUpdateStatus}
@@ -439,6 +451,31 @@ export default function Tasks() {
           <TaskList
             tasks={filteredTasks.filter((t) => t.status === 'done')}
             isAdmin={isAdmin}
+            currentUserId={user?._id || user?.id || ''}
+            getStatusBadge={getStatusBadge}
+            getDueDateColor={getDueDateColor}
+            onUpdateStatus={handleUpdateStatus}
+            onEdit={openEdit}
+            onDelete={setDeleteId}
+          />
+        </TabsContent>
+        <TabsContent value="review" className="m-0">
+          <TaskList
+            tasks={filteredTasks.filter((t) => t.status === 'review')}
+            isAdmin={isAdmin}
+            currentUserId={user?._id || user?.id || ''}
+            getStatusBadge={getStatusBadge}
+            getDueDateColor={getDueDateColor}
+            onUpdateStatus={handleUpdateStatus}
+            onEdit={openEdit}
+            onDelete={setDeleteId}
+          />
+        </TabsContent>
+        <TabsContent value="rejected" className="m-0">
+          <TaskList
+            tasks={filteredTasks.filter((t) => t.status === 'rejected')}
+            isAdmin={isAdmin}
+            currentUserId={user?._id || user?.id || ''}
             getStatusBadge={getStatusBadge}
             getDueDateColor={getDueDateColor}
             onUpdateStatus={handleUpdateStatus}
@@ -532,6 +569,7 @@ export default function Tasks() {
 function TaskList({
   tasks,
   isAdmin,
+  currentUserId,
   getStatusBadge,
   getDueDateColor,
   onUpdateStatus,
@@ -540,6 +578,7 @@ function TaskList({
 }: {
   tasks: Task[];
   isAdmin: boolean;
+  currentUserId: string;
   getStatusBadge: (status: TaskStatus) => React.ReactNode;
   getDueDateColor: (dueDate: string, status: TaskStatus) => string;
   onUpdateStatus: (id: string, status: TaskStatus) => void;
@@ -559,6 +598,10 @@ function TaskList({
   return (
     <div className="space-y-3">
       {tasks.map((task) => (
+        (() => {
+          const isAssignee =
+            task.assignedTo?._id === currentUserId || task.assignedTo?.id === currentUserId;
+          return (
         <Card key={task._id} className="hover:shadow-md transition-shadow">
           <CardContent className="p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -572,6 +615,13 @@ function TaskList({
                 <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 mb-2">
                   {task.description || 'No description'}
                 </p>
+                <div className="mb-2 space-y-1">
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>Progress</span>
+                    <span>{task.progressPercent ?? 0}%</span>
+                  </div>
+                  <Progress value={task.progressPercent ?? 0} />
+                </div>
                 <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
                   <span className="flex items-center gap-1">
                     <UserIcon className="h-3.5 w-3.5" />
@@ -588,7 +638,15 @@ function TaskList({
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                {task.status !== 'done' && (
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to={`/tasks/${task._id}`}>Details</Link>
+                </Button>
+                {(isAssignee || isAdmin) && (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to={`/tasks/${task._id}?update=1`}>Add Update</Link>
+                  </Button>
+                )}
+                {isAdmin && task.status !== 'done' && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -598,7 +656,7 @@ function TaskList({
                     Complete
                   </Button>
                 )}
-                {task.status === 'todo' && (
+                {isAdmin && task.status === 'todo' && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -627,6 +685,8 @@ function TaskList({
             </div>
           </CardContent>
         </Card>
+          );
+        })()
       ))}
     </div>
   );

@@ -6,7 +6,12 @@ import {
   updateTask,
   deleteTask,
 } from '../controllers/taskController.js';
+import {
+  createTaskUpdate,
+  getTaskUpdatesByTask,
+} from '../controllers/taskUpdateController.js';
 import { authMiddleware, adminMiddleware } from '../middleware/auth.js';
+import { taskUpdateUpload } from '../config/upload.js';
 
 const router = express.Router();
 
@@ -14,6 +19,8 @@ router.use(authMiddleware);
 
 router.post('/', adminMiddleware, createTask);
 router.get('/', getTasks);
+router.get('/:id/updates', getTaskUpdatesByTask);
+router.post('/:id/updates', taskUpdateUpload.array('attachments', 5), createTaskUpdate);
 router.get('/:id', getTaskById);
 router.put('/:id', updateTask);
 router.delete('/:id', deleteTask);

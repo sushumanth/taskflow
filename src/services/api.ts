@@ -1,8 +1,18 @@
 import axios from 'axios';
 import type { AxiosInstance } from 'axios';
-import type { ApiResponse, User, Project, Task, DashboardStats } from '../types';
+import type {
+  ApiResponse,
+  User,
+  Project,
+  Task,
+  DashboardStats,
+  TaskUpdate,
+  ReviewStatus,
+  Notification,
+} from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+export const API_BASE_URL = API_URL.replace(/\/?api\/?$/, '');
 
 const api: AxiosInstance = axios.create({
   baseURL: API_URL,
@@ -111,6 +121,71 @@ export const updateTask = async (id: string, data: { title?: string; description
 
 export const deleteTask = async (id: string): Promise<ApiResponse<void>> => {
   const response = await api.delete(`/tasks/${id}`);
+  return response.data;
+};
+
+// Task Updates
+export const createTaskUpdate = async (taskId: string, data: FormData): Promise<ApiResponse<{ update: TaskUpdate }>> => {
+  const response = await api.post(`/tasks/${taskId}/updates`, data, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+export const getTaskUpdates = async (taskId: string): Promise<ApiResponse<{ updates: TaskUpdate[] }>> => {
+  const response = await api.get(`/tasks/${taskId}/updates`);
+  return response.data;
+};
+
+export const getMyTaskUpdates = async (employeeId?: string): Promise<ApiResponse<{ updates: TaskUpdate[] }>> => {
+  const response = await api.get('/task-updates/my', { params: employeeId ? { employeeId } : undefined });
+  return response.data;
+};
+
+export const reviewTaskUpdate = async (
+  updateId: string,
+  data: { status: ReviewStatus; comment?: string }
+): Promise<ApiResponse<{ update: TaskUpdate }>> => {
+  const response = await api.post(`/task-updates/${updateId}/review`, data);
+  return response.data;
+};
+
+export const addTaskUpdateComment = async (
+  updateId: string,
+  text: string
+): Promise<ApiResponse<{ update: TaskUpdate }>> => {
+  const response = await api.post(`/task-updates/${updateId}/comments`, { text });
+  return response.data;
+};
+
+export const updateTaskUpdate = async (
+  updateId: string,
+  data: FormData
+): Promise<ApiResponse<{ update: TaskUpdate }>> => {
+  const response = await api.put(`/task-updates/${updateId}`, data, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+export const deleteTaskUpdate = async (updateId: string): Promise<ApiResponse<void>> => {
+  const response = await api.delete(`/task-updates/${updateId}`);
+  return response.data;
+};
+
+// Notifications
+export const getNotifications = async (limit = 20): Promise<ApiResponse<{ notifications: Notification[] }>> => {
+  const response = await api.get('/notifications', { params: { limit } });
+  return response.data;
+};
+
+export const markNotificationRead = async (id: string): Promise<ApiResponse<{ notification: Notification }>> => {
+  const response = await api.put(`/notifications/${id}/read`);
+  return response.data;
+};
+
+export const markAllNotificationsRead = async (): Promise<ApiResponse<void>> => {
+  const response = await api.put('/notifications/read-all');
   return response.data;
 };
 

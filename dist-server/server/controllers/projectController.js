@@ -1,4 +1,35 @@
 import Project from '../models/Project.js';
+import Task from '../models/Task.js';
+const attachProjectProgress = async (projects) => {
+    if (projects.length === 0)
+        return projects;
+    const projectIds = projects.map((project) => project._id);
+    const progressAgg = await Task.aggregate([
+        { $match: { projectId: { $in: projectIds } } },
+        {
+            $group: {
+                _id: '$projectId',
+                avgProgress: { $avg: '$progressPercent' },
+                totalTasks: { $sum: 1 },
+                completedTasks: {
+                    $sum: {
+                        $cond: [{ $eq: ['$status', 'done'] }, 1, 0],
+                    },
+                },
+            },
+        },
+    ]);
+    const progressMap = new Map(progressAgg.map((entry) => [entry._id.toString(), entry]));
+    return projects.map((project) => {
+        const stats = progressMap.get(project._id.toString());
+        return {
+            ...project.toObject(),
+            progressPercent: Math.round(stats?.avgProgress || 0),
+            taskCount: stats?.totalTasks || 0,
+            completedTasks: stats?.completedTasks || 0,
+        };
+    });
+};
 export const createProject = async (req, res) => {
     try {
         const { name, description, members = [] } = req.body;
@@ -24,13 +55,21 @@ export const getProjects = async (req, res) => {
         const userRole = req.user?.role;
         let query = {};
         if (userRole !== 'admin') {
-            query = { members: { $in: [userId] } };
+            const assignedProjectIds = await Task.distinct('projectId', { assignedTo: userId });
+            query = {
+                $or: [
+                    { members: { $in: [userId] } },
+                    { createdBy: userId },
+                    { _id: { $in: assignedProjectIds } },
+                ],
+            };
         }
         const projects = await Project.find(query)
             .populate('createdBy', 'name email')
             .populate('members', 'name email')
             .sort({ createdAt: -1 });
-        res.status(200).json({ success: true, projects });
+        const projectsWithProgress = await attachProjectProgress(projects);
+        res.status(200).json({ success: true, projects: projectsWithProgress });
     }
     catch (error) {
         console.error('Get projects error:', error);
@@ -48,11 +87,13 @@ export const getProjectById = async (req, res) => {
         }
         const isMember = project.members.some((m) => m._id.toString() === req.user?._id.toString());
         const isCreator = project.createdBy._id.toString() === req.user?._id.toString();
-        if (!isMember && !isCreator && req.user?.role !== 'admin') {
+        const hasAssignedTask = await Task.exists({ projectId: project._id, assignedTo: req.user?._id });
+        if (!isMember && !isCreator && !hasAssignedTask && req.user?.role !== 'admin') {
             res.status(403).json({ success: false, message: 'Not authorized to view this project' });
             return;
         }
-        res.status(200).json({ success: true, project });
+        const [projectWithProgress] = await attachProjectProgress([project]);
+        res.status(200).json({ success: true, project: projectWithProgress });
     }
     catch (error) {
         console.error('Get project error:', error);

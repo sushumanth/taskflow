@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import {
   Dialog,
   DialogContent,
@@ -283,6 +284,17 @@ export default function Projects() {
                 <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
                   {project.description || 'No description'}
                 </p>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>Progress</span>
+                    <span>{project.progressPercent ?? 0}%</span>
+                  </div>
+                  <Progress value={project.progressPercent ?? 0} />
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>{project.completedTasks ?? 0} completed</span>
+                    <span>{project.taskCount ?? 0} total</span>
+                  </div>
+                </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-gray-400" />

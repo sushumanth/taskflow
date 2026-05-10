@@ -23,8 +23,33 @@ const TaskSchema = new Schema({
     },
     status: {
         type: String,
-        enum: ['todo', 'in-progress', 'done'],
+        enum: ['todo', 'in-progress', 'review', 'done', 'rejected'],
         default: 'todo',
+    },
+    progressPercent: {
+        type: Number,
+        min: 0,
+        max: 100,
+        default: 0,
+    },
+    lastUpdateAt: {
+        type: Date,
+    },
+    lastUpdatedBy: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+    },
+    lastFeedback: {
+        type: String,
+        trim: true,
+        maxlength: [1000, 'Feedback cannot exceed 1000 characters'],
+    },
+    lastFeedbackAt: {
+        type: Date,
+    },
+    lastFeedbackBy: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
     },
     dueDate: {
         type: Date,

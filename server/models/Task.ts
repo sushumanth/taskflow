@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
-export type TaskStatus = 'todo' | 'in-progress' | 'done';
+export type TaskStatus = 'todo' | 'in-progress' | 'review' | 'done' | 'rejected';
 
 export interface ITask extends Document {
   title: string;
@@ -8,6 +8,12 @@ export interface ITask extends Document {
   projectId: mongoose.Types.ObjectId;
   assignedTo: mongoose.Types.ObjectId;
   status: TaskStatus;
+  progressPercent: number;
+  lastUpdateAt?: Date;
+  lastUpdatedBy?: mongoose.Types.ObjectId;
+  lastFeedback?: string;
+  lastFeedbackAt?: Date;
+  lastFeedbackBy?: mongoose.Types.ObjectId;
   dueDate: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -38,8 +44,33 @@ const TaskSchema: Schema = new Schema(
     },
     status: {
       type: String,
-      enum: ['todo', 'in-progress', 'done'],
+      enum: ['todo', 'in-progress', 'review', 'done', 'rejected'],
       default: 'todo',
+    },
+    progressPercent: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: 0,
+    },
+    lastUpdateAt: {
+      type: Date,
+    },
+    lastUpdatedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    lastFeedback: {
+      type: String,
+      trim: true,
+      maxlength: [1000, 'Feedback cannot exceed 1000 characters'],
+    },
+    lastFeedbackAt: {
+      type: Date,
+    },
+    lastFeedbackBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
     },
     dueDate: {
       type: Date,
