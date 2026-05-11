@@ -11,7 +11,7 @@ import type { Team, Task, Project, TeamActivity, TeamUpdate, TeamPerformanceSumm
 import { useAuth } from '../hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
+import AnimatedProgress from '@/components/AnimatedProgress';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -256,7 +256,7 @@ export default function TeamDetails() {
                 <span>Overall Progress</span>
                 <span>{team.progressPercent ?? 0}%</span>
               </div>
-              <Progress value={team.progressPercent ?? 0} />
+              <AnimatedProgress value={team.progressPercent ?? 0} showMeta={false} size="sm" />
             </div>
             <div className="flex flex-wrap gap-4 text-sm text-gray-500">
               <span className="flex items-center gap-1">

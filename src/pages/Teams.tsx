@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
+import AnimatedProgress from '@/components/AnimatedProgress';
 import {
   Dialog,
   DialogContent,
@@ -539,7 +539,7 @@ export default function Teams() {
                     <span>Progress</span>
                     <span>{team.progressPercent ?? 0}%</span>
                   </div>
-                  <Progress value={team.progressPercent ?? 0} />
+                  <AnimatedProgress value={team.progressPercent ?? 0} showMeta={false} size="sm" />
                   <div className="flex items-center justify-between text-xs text-gray-500">
                     <span>{team.completedTasks ?? 0} completed</span>
                     <span>{team.taskCount ?? 0} total</span>

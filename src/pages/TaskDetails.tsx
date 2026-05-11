@@ -15,7 +15,7 @@ import { useAuth } from '../hooks/useAuth';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
+import AnimatedProgress from '@/components/AnimatedProgress';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -346,7 +346,7 @@ export default function TaskDetails() {
               <span>Progress</span>
               <span>{task.progressPercent ?? 0}%</span>
             </div>
-            <Progress value={task.progressPercent ?? 0} />
+            <AnimatedProgress value={task.progressPercent ?? 0} showMeta={false} size="sm" />
           </div>
           {task.lastFeedback && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">

@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
+import AnimatedProgress from '@/components/AnimatedProgress';
 import {
   Select,
   SelectContent,
@@ -447,7 +447,7 @@ export default function Projects() {
                     <span>Progress</span>
                     <span>{project.progressPercent ?? 0}%</span>
                   </div>
-                  <Progress value={project.progressPercent ?? 0} />
+                  <AnimatedProgress value={project.progressPercent ?? 0} showMeta={false} size="sm" />
                   <div className="flex items-center justify-between text-xs text-gray-500">
                     <span>{project.completedTasks ?? 0} completed</span>
                     <span>{project.taskCount ?? 0} total</span>

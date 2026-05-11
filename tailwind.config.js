@@ -72,11 +72,37 @@ module.exports = {
           "0%,70%,100%": { opacity: "1" },
           "20%,50%": { opacity: "0" },
         },
+        "progress-shimmer": {
+          "0%": { transform: "translateX(-60%)" },
+          "100%": { transform: "translateX(160%)" },
+        },
+        "progress-wave": {
+          "0%": { transform: "translateX(-50%)" },
+          "100%": { transform: "translateX(50%)" },
+        },
+        "progress-glow": {
+          "0%,100%": { opacity: "0.5", transform: "scale(0.9)" },
+          "50%": { opacity: "1", transform: "scale(1.15)" },
+        },
+        "progress-pulse": {
+          "0%,100%": { transform: "translateY(-50%) scale(0.95)", opacity: "0.7" },
+          "50%": { transform: "translateY(-50%) scale(1.1)", opacity: "1" },
+        },
+        "progress-dot": {
+          "0%": { opacity: "0.2" },
+          "40%": { opacity: "0.9" },
+          "100%": { opacity: "0.2" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "caret-blink": "caret-blink 1.25s ease-out infinite",
+        "progress-shimmer": "progress-shimmer 2.2s ease-in-out infinite",
+        "progress-wave": "progress-wave 2.6s ease-in-out infinite",
+        "progress-glow": "progress-glow 1.6s ease-in-out infinite",
+        "progress-pulse": "progress-pulse 1.8s ease-in-out infinite",
+        "progress-dot": "progress-dot 1.4s ease-in-out infinite",
       },
     },
   },

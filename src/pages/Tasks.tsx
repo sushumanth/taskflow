@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
+import AnimatedProgress from '@/components/AnimatedProgress';
 import {
   Dialog,
   DialogContent,
@@ -939,7 +939,7 @@ function TaskList({
                     <span>Progress</span>
                     <span>{task.progressPercent ?? 0}%</span>
                   </div>
-                  <Progress value={task.progressPercent ?? 0} />
+                  <AnimatedProgress value={task.progressPercent ?? 0} showMeta={false} size="sm" />
                 </div>
                 <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
                   <span className="flex items-center gap-1">
