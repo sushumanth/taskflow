@@ -5,6 +5,17 @@ export interface IProject extends Document {
   description: string;
   createdBy: mongoose.Types.ObjectId;
   members: mongoose.Types.ObjectId[];
+  assignedTeamId?: mongoose.Types.ObjectId;
+  teamAssignment?: {
+    dueDate?: Date;
+    priority?: 'low' | 'medium' | 'high' | 'critical';
+    workload?: number;
+    status?: 'planned' | 'in-progress' | 'blocked' | 'review' | 'done';
+  };
+  progressPercent?: number;
+  lastUpdateAt?: Date;
+  lastUpdatedBy?: mongoose.Types.ObjectId;
+  lastUpdateStatus?: 'on-track' | 'at-risk' | 'delayed';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -33,6 +44,44 @@ const ProjectSchema: Schema = new Schema(
         ref: 'User',
       },
     ],
+    assignedTeamId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Team',
+    },
+    teamAssignment: {
+      dueDate: {
+        type: Date,
+      },
+      priority: {
+        type: String,
+        enum: ['low', 'medium', 'high', 'critical'],
+      },
+      workload: {
+        type: Number,
+        min: 0,
+      },
+      status: {
+        type: String,
+        enum: ['planned', 'in-progress', 'blocked', 'review', 'done'],
+      },
+    },
+    progressPercent: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: 0,
+    },
+    lastUpdateAt: {
+      type: Date,
+    },
+    lastUpdatedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    lastUpdateStatus: {
+      type: String,
+      enum: ['on-track', 'at-risk', 'delayed'],
+    },
   },
   {
     timestamps: true,

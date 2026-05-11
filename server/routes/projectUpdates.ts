@@ -1,0 +1,19 @@
+import express from 'express';
+import {
+  createProjectUpdate,
+  getProjectUpdates,
+  addProjectUpdateComment,
+  getProjectActivity,
+} from '../controllers/projectUpdateController.js';
+import { authMiddleware } from '../middleware/auth.js';
+
+const router = express.Router();
+
+router.use(authMiddleware);
+
+router.get('/:id', getProjectUpdates);
+router.post('/:id', createProjectUpdate);
+router.post('/:id/comments/:updateId', addProjectUpdateComment);
+router.get('/:id/activity', getProjectActivity);
+
+export default router;

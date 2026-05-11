@@ -1,8 +1,30 @@
 import Task from '../models/Task.js';
 import Project from '../models/Project.js';
+import Team from '../models/Team.js';
+const getTeamIdsForUser = async (userId) => {
+    if (!userId)
+        return [];
+    const teams = await Team.find({
+        $or: [{ leadUserId: userId }, { memberUserIds: userId }],
+    }).select('_id');
+    return teams.map((team) => team._id.toString());
+};
+const ensureTeamMembersInProject = async (project, teamId) => {
+    const team = await Team.findById(teamId).select('leadUserId memberUserIds');
+    if (!team)
+        return;
+    const teamMembers = [team.leadUserId, ...team.memberUserIds]
+        .map((id) => id.toString());
+    const existing = new Set(project.members.map((member) => member.toString()));
+    teamMembers.forEach((id) => {
+        if (!existing.has(id)) {
+            project.members.push(id);
+        }
+    });
+};
 export const createTask = async (req, res) => {
     try {
-        const { title, description, projectId, assignedTo, dueDate } = req.body;
+        const { title, description, projectId, assignedTo, assignedTeamId, teamAssignment, dueDate, } = req.body;
         const project = await Project.findById(projectId);
         if (!project) {
             res.status(404).json({ success: false, message: 'Project not found' });
@@ -12,8 +34,22 @@ export const createTask = async (req, res) => {
             res.status(403).json({ success: false, message: 'Not authorized to create tasks in this project' });
             return;
         }
+        if (!assignedTo && !assignedTeamId) {
+            res.status(400).json({ success: false, message: 'Assignee or team is required' });
+            return;
+        }
         if (assignedTo && !project.members.some((member) => member.toString() === assignedTo)) {
             project.members.push(assignedTo);
+        }
+        if (assignedTeamId) {
+            const team = await Team.findById(assignedTeamId).select('_id');
+            if (!team) {
+                res.status(404).json({ success: false, message: 'Team not found' });
+                return;
+            }
+            await ensureTeamMembersInProject(project, assignedTeamId);
+        }
+        if (project.isModified('members')) {
             await project.save();
         }
         const task = await Task.create({
@@ -21,13 +57,16 @@ export const createTask = async (req, res) => {
             description,
             projectId,
             assignedTo,
+            assignedTeamId,
+            teamAssignment,
             status: 'todo',
             progressPercent: 0,
             dueDate: new Date(dueDate),
         });
         const populatedTask = await Task.findById(task._id)
             .populate('projectId', 'name')
-            .populate('assignedTo', 'name email');
+            .populate('assignedTo', 'name email')
+            .populate('assignedTeamId', 'name leadUserId memberUserIds status');
         res.status(201).json({ success: true, task: populatedTask });
     }
     catch (error) {
@@ -48,11 +87,13 @@ export const getTasks = async (req, res) => {
             query.status = status;
         }
         if (userRole !== 'admin') {
-            query.assignedTo = userId;
+            const teamIds = await getTeamIdsForUser(userId?.toString());
+            query.$or = [{ assignedTo: userId }, { assignedTeamId: { $in: teamIds } }];
         }
         const tasks = await Task.find(query)
             .populate('projectId', 'name')
             .populate('assignedTo', 'name email')
+            .populate('assignedTeamId', 'name leadUserId memberUserIds status')
             .sort({ createdAt: -1 });
         res.status(200).json({ success: true, tasks });
     }
@@ -65,13 +106,20 @@ export const getTaskById = async (req, res) => {
     try {
         const task = await Task.findById(req.params.id)
             .populate('projectId', 'name')
-            .populate('assignedTo', 'name email');
+            .populate('assignedTo', 'name email')
+            .populate('assignedTeamId', 'name leadUserId memberUserIds status');
         if (!task) {
             res.status(404).json({ success: false, message: 'Task not found' });
             return;
         }
-        const canAccess = task.assignedTo._id.toString() === req.user?._id.toString() ||
-            req.user?.role === 'admin';
+        let canAccess = req.user?.role === 'admin';
+        if (!canAccess && task.assignedTo) {
+            canAccess = task.assignedTo._id.toString() === req.user?._id.toString();
+        }
+        if (!canAccess && task.assignedTeamId) {
+            const teamIds = await getTeamIdsForUser(req.user?._id.toString());
+            canAccess = teamIds.includes(task.assignedTeamId._id.toString());
+        }
         if (!canAccess) {
             const project = await Project.findById(task.projectId);
             if (project?.createdBy.toString() !== req.user?._id.toString()) {
@@ -88,20 +136,24 @@ export const getTaskById = async (req, res) => {
 };
 export const updateTask = async (req, res) => {
     try {
-        const { title, description, assignedTo, status, dueDate } = req.body;
+        const { title, description, assignedTo, assignedTeamId, teamAssignment, status, dueDate } = req.body;
         const task = await Task.findById(req.params.id);
         if (!task) {
             res.status(404).json({ success: false, message: 'Task not found' });
             return;
         }
         const isAdmin = req.user?.role === 'admin';
-        const isAssignee = task.assignedTo.toString() === req.user?._id.toString();
-        if (!isAdmin && !isAssignee) {
+        const isAssignee = task.assignedTo?.toString() === req.user?._id.toString();
+        const teamIds = await getTeamIdsForUser(req.user?._id.toString());
+        const isTeamMember = task.assignedTeamId
+            ? teamIds.includes(task.assignedTeamId.toString())
+            : false;
+        if (!isAdmin && !isAssignee && !isTeamMember) {
             res.status(403).json({ success: false, message: 'Not authorized to update this task' });
             return;
         }
         // Members can only update status, admins can update everything
-        if (!isAdmin && isAssignee) {
+        if (!isAdmin && (isAssignee || isTeamMember)) {
             if (status && ['todo', 'in-progress', 'review', 'done', 'rejected'].includes(status)) {
                 task.status = status;
             }
@@ -115,8 +167,27 @@ export const updateTask = async (req, res) => {
                 task.title = title;
             if (description !== undefined)
                 task.description = description;
-            if (assignedTo)
-                task.assignedTo = assignedTo;
+            if (assignedTo !== undefined)
+                task.assignedTo = assignedTo || undefined;
+            if (assignedTeamId !== undefined) {
+                if (assignedTeamId) {
+                    const team = await Team.findById(assignedTeamId).select('_id');
+                    if (!team) {
+                        res.status(404).json({ success: false, message: 'Team not found' });
+                        return;
+                    }
+                    const project = await Project.findById(task.projectId);
+                    if (project) {
+                        await ensureTeamMembersInProject(project, assignedTeamId);
+                        if (project.isModified('members')) {
+                            await project.save();
+                        }
+                    }
+                }
+                task.assignedTeamId = assignedTeamId || undefined;
+            }
+            if (teamAssignment !== undefined)
+                task.teamAssignment = teamAssignment;
             if (status && ['todo', 'in-progress', 'review', 'done', 'rejected'].includes(status)) {
                 task.status = status;
             }
@@ -126,7 +197,8 @@ export const updateTask = async (req, res) => {
         await task.save();
         const updatedTask = await Task.findById(task._id)
             .populate('projectId', 'name')
-            .populate('assignedTo', 'name email');
+            .populate('assignedTo', 'name email')
+            .populate('assignedTeamId', 'name leadUserId memberUserIds status');
         res.status(200).json({ success: true, task: updatedTask });
     }
     catch (error) {

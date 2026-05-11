@@ -1,7 +1,33 @@
 import { Response } from 'express';
 import Project from '../models/Project.js';
 import Task from '../models/Task.js';
+import TaskUpdate from '../models/TaskUpdate.js';
+import ProjectUpdate from '../models/ProjectUpdate.js';
+import Team from '../models/Team.js';
 import { AuthRequest } from '../middleware/auth.js';
+
+const getTeamIdsForUser = async (userId?: string) => {
+  if (!userId) return [] as string[];
+  const teams = await Team.find({
+    $or: [{ leadUserId: userId }, { memberUserIds: userId }],
+  }).select('_id');
+  return teams.map((team) => team._id.toString());
+};
+
+const ensureTeamMembersInProject = async (project: any, teamId: string) => {
+  const team = await Team.findById(teamId).select('leadUserId memberUserIds');
+  if (!team) return;
+
+  const teamMembers = [team.leadUserId, ...team.memberUserIds]
+    .map((id) => id.toString());
+
+  const existing = new Set(project.members.map((member: any) => member.toString()));
+  teamMembers.forEach((id) => {
+    if (!existing.has(id)) {
+      project.members.push(id);
+    }
+  });
+};
 
 const attachProjectProgress = async (projects: any[]) => {
   if (projects.length === 0) return projects;
@@ -29,9 +55,12 @@ const attachProjectProgress = async (projects: any[]) => {
 
   return projects.map((project) => {
     const stats = progressMap.get(project._id.toString());
+    const hasManualProgress = Boolean(project.lastUpdateAt);
     return {
       ...project.toObject(),
-      progressPercent: Math.round(stats?.avgProgress || 0),
+      progressPercent: hasManualProgress
+        ? Math.round(project.progressPercent || 0)
+        : Math.round(stats?.avgProgress || 0),
       taskCount: stats?.totalTasks || 0,
       completedTasks: stats?.completedTasks || 0,
     };
@@ -40,18 +69,34 @@ const attachProjectProgress = async (projects: any[]) => {
 
 export const createProject = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { name, description, members = [] } = req.body;
+    const { name, description, members = [], assignedTeamId, teamAssignment } = req.body;
+
+    if (assignedTeamId) {
+      const team = await Team.findById(assignedTeamId).select('_id');
+      if (!team) {
+        res.status(404).json({ success: false, message: 'Team not found' });
+        return;
+      }
+    }
 
     const project = await Project.create({
       name,
       description,
       createdBy: req.user?._id,
       members: [...members, req.user?._id],
+      assignedTeamId,
+      teamAssignment,
     });
+
+    if (assignedTeamId) {
+      await ensureTeamMembersInProject(project, assignedTeamId);
+      await project.save();
+    }
 
     const populatedProject = await Project.findById(project._id)
       .populate('createdBy', 'name email')
-      .populate('members', 'name email');
+      .populate('members', 'name email')
+      .populate('assignedTeamId', 'name leadUserId memberUserIds status');
 
     res.status(201).json({ success: true, project: populatedProject });
   } catch (error) {
@@ -67,12 +112,14 @@ export const getProjects = async (req: AuthRequest, res: Response): Promise<void
 
     let query = {};
     if (userRole !== 'admin') {
+      const teamIds = await getTeamIdsForUser(userId?.toString());
       const assignedProjectIds = await Task.distinct('projectId', { assignedTo: userId });
       query = {
         $or: [
           { members: { $in: [userId] } },
           { createdBy: userId },
           { _id: { $in: assignedProjectIds } },
+          { assignedTeamId: { $in: teamIds } },
         ],
       };
     }
@@ -80,6 +127,7 @@ export const getProjects = async (req: AuthRequest, res: Response): Promise<void
     const projects = await Project.find(query)
       .populate('createdBy', 'name email')
       .populate('members', 'name email')
+      .populate('assignedTeamId', 'name leadUserId memberUserIds status')
       .sort({ createdAt: -1 });
 
     const projectsWithProgress = await attachProjectProgress(projects);
@@ -95,7 +143,8 @@ export const getProjectById = async (req: AuthRequest, res: Response): Promise<v
   try {
     const project = await Project.findById(req.params.id)
       .populate('createdBy', 'name email')
-      .populate('members', 'name email');
+      .populate('members', 'name email')
+      .populate('assignedTeamId', 'name leadUserId memberUserIds status');
 
     if (!project) {
       res.status(404).json({ success: false, message: 'Project not found' });
@@ -107,8 +156,12 @@ export const getProjectById = async (req: AuthRequest, res: Response): Promise<v
     );
     const isCreator = project.createdBy._id.toString() === req.user?._id.toString();
     const hasAssignedTask = await Task.exists({ projectId: project._id, assignedTo: req.user?._id });
+    const teamIds = await getTeamIdsForUser(req.user?._id.toString());
+    const isTeamMember = project.assignedTeamId
+      ? teamIds.includes(project.assignedTeamId._id.toString())
+      : false;
 
-    if (!isMember && !isCreator && !hasAssignedTask && req.user?.role !== 'admin') {
+    if (!isMember && !isCreator && !hasAssignedTask && !isTeamMember && req.user?.role !== 'admin') {
       res.status(403).json({ success: false, message: 'Not authorized to view this project' });
       return;
     }
@@ -123,7 +176,7 @@ export const getProjectById = async (req: AuthRequest, res: Response): Promise<v
 
 export const updateProject = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { name, description } = req.body;
+    const { name, description, assignedTeamId, teamAssignment } = req.body;
     const project = await Project.findById(req.params.id);
 
     if (!project) {
@@ -138,11 +191,24 @@ export const updateProject = async (req: AuthRequest, res: Response): Promise<vo
 
     project.name = name || project.name;
     project.description = description !== undefined ? description : project.description;
+    if (assignedTeamId !== undefined) {
+      if (assignedTeamId) {
+        const team = await Team.findById(assignedTeamId).select('_id');
+        if (!team) {
+          res.status(404).json({ success: false, message: 'Team not found' });
+          return;
+        }
+        await ensureTeamMembersInProject(project, assignedTeamId);
+      }
+      project.assignedTeamId = assignedTeamId || undefined;
+    }
+    if (teamAssignment !== undefined) project.teamAssignment = teamAssignment;
     await project.save();
 
     const updatedProject = await Project.findById(project._id)
       .populate('createdBy', 'name email')
-      .populate('members', 'name email');
+      .populate('members', 'name email')
+      .populate('assignedTeamId', 'name leadUserId memberUserIds status');
 
     res.status(200).json({ success: true, project: updatedProject });
   } catch (error) {
@@ -160,11 +226,19 @@ export const deleteProject = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    if (project.createdBy.toString() !== req.user?._id.toString() && req.user?.role !== 'admin') {
+    if (req.user?.role !== 'admin') {
       res.status(403).json({ success: false, message: 'Not authorized to delete this project' });
       return;
     }
 
+    const taskIds = await Task.find({ projectId: project._id }).select('_id');
+    const taskIdList = taskIds.map((task) => task._id);
+    if (taskIdList.length > 0) {
+      await TaskUpdate.deleteMany({ taskId: { $in: taskIdList } });
+      await Task.deleteMany({ projectId: project._id });
+    }
+
+    await ProjectUpdate.deleteMany({ projectId: project._id });
     await project.deleteOne();
     res.status(200).json({ success: true, message: 'Project deleted' });
   } catch (error) {

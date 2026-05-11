@@ -8,8 +8,9 @@ import {
   deleteTask,
   getProjects,
   getAllUsers,
+  getTeams,
 } from '../services/api';
-import type { Task, Project, User, TaskStatus } from '../types';
+import type { Task, Project, User, TaskStatus, Team, TeamAssignment } from '../types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -51,6 +52,7 @@ import {
   ListTodo,
   Calendar,
   User as UserIcon,
+  Users,
   ArrowRight,
   Search,
   Edit3,
@@ -66,6 +68,7 @@ export default function Tasks() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -79,14 +82,24 @@ export default function Tasks() {
     description: '',
     projectId: '',
     assignedTo: '',
+    assignedTeamId: '',
     dueDate: '',
+    teamAssignment: {
+      dueDate: '',
+      priority: 'medium',
+      workload: '',
+      status: 'planned',
+    },
   });
+
+  const [assignMode, setAssignMode] = useState<'user' | 'team'>('user');
 
   useEffect(() => {
     fetchTasks();
     fetchProjects();
     if (isAdmin) {
       fetchUsers();
+      fetchTeams();
     }
   }, [projectFilter, isAdmin]);
 
@@ -132,14 +145,68 @@ export default function Tasks() {
     }
   };
 
+  const fetchTeams = async () => {
+    try {
+      const response = await getTeams();
+      if (response.success) {
+        setTeams(response.teams || []);
+      }
+    } catch (error) {
+      console.error('Failed to load teams');
+    }
+  };
+
+  const buildTeamAssignment = (): TeamAssignment | undefined => {
+    if (assignMode !== 'team') return undefined;
+
+    const { teamAssignment } = formData;
+    const workloadNumber = Number(teamAssignment.workload);
+    return {
+      dueDate: teamAssignment.dueDate || undefined,
+      priority: (teamAssignment.priority as TeamAssignment['priority']) || undefined,
+      workload: Number.isFinite(workloadNumber) && workloadNumber > 0 ? workloadNumber : undefined,
+      status: (teamAssignment.status as TeamAssignment['status']) || undefined,
+    };
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (assignMode === 'user' && !formData.assignedTo) {
+      toast.error('Please select an assignee');
+      return;
+    }
+    if (assignMode === 'team' && !formData.assignedTeamId) {
+      toast.error('Please select a team');
+      return;
+    }
     try {
-      const response = await createTask(formData);
+      const response = await createTask({
+        title: formData.title,
+        description: formData.description,
+        projectId: formData.projectId,
+        assignedTo: assignMode === 'user' ? formData.assignedTo : undefined,
+        assignedTeamId: assignMode === 'team' ? formData.assignedTeamId : undefined,
+        dueDate: formData.dueDate,
+        teamAssignment: buildTeamAssignment(),
+      });
       if (response.success) {
         toast.success('Task created successfully');
         setIsCreateOpen(false);
-        setFormData({ title: '', description: '', projectId: projects[0]?._id || '', assignedTo: '', dueDate: '' });
+        setFormData({
+          title: '',
+          description: '',
+          projectId: projects[0]?._id || '',
+          assignedTo: '',
+          assignedTeamId: '',
+          dueDate: '',
+          teamAssignment: {
+            dueDate: '',
+            priority: 'medium',
+            workload: '',
+            status: 'planned',
+          },
+        });
+        setAssignMode('user');
         fetchTasks();
       }
     } catch (error: any) {
@@ -162,11 +229,21 @@ export default function Tasks() {
   const handleUpdateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTask) return;
+    if (assignMode === 'user' && !formData.assignedTo) {
+      toast.error('Please select an assignee');
+      return;
+    }
+    if (assignMode === 'team' && !formData.assignedTeamId) {
+      toast.error('Please select a team');
+      return;
+    }
     try {
       const response = await updateTask(editingTask._id, {
         title: formData.title,
         description: formData.description,
-        assignedTo: formData.assignedTo,
+        assignedTo: assignMode === 'user' ? formData.assignedTo : undefined,
+        assignedTeamId: assignMode === 'team' ? formData.assignedTeamId : undefined,
+        teamAssignment: buildTeamAssignment(),
         dueDate: formData.dueDate,
       });
       if (response.success) {
@@ -194,12 +271,23 @@ export default function Tasks() {
 
   const openEdit = (task: Task) => {
     setEditingTask(task);
+    const isTeamAssigned = Boolean(task.assignedTeamId?._id);
+    setAssignMode(isTeamAssigned ? 'team' : 'user');
     setFormData({
       title: task.title,
       description: task.description || '',
       projectId: task.projectId._id,
-      assignedTo: task.assignedTo.id || (task.assignedTo as any)._id,
+      assignedTo: task.assignedTo?.id || (task.assignedTo as any)?._id || '',
+      assignedTeamId: task.assignedTeamId?._id || '',
       dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
+      teamAssignment: {
+        dueDate: task.teamAssignment?.dueDate
+          ? new Date(task.teamAssignment.dueDate).toISOString().split('T')[0]
+          : '',
+        priority: task.teamAssignment?.priority || 'medium',
+        workload: task.teamAssignment?.workload?.toString() || '',
+        status: task.teamAssignment?.status || 'planned',
+      },
     });
     setIsEditOpen(true);
   };
@@ -316,23 +404,135 @@ export default function Tasks() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="assignedTo">Assign To</Label>
-                  <Select
-                    value={formData.assignedTo}
-                    onValueChange={(value) => setFormData({ ...formData, assignedTo: value })}
-                  >
+                  <Label htmlFor="assignMode">Assign To</Label>
+                  <Select value={assignMode} onValueChange={(value) => setAssignMode(value as 'user' | 'team')}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select user" />
+                      <SelectValue placeholder="Select assignment" />
                     </SelectTrigger>
                     <SelectContent>
-                      {users.map((user) => (
-                        <SelectItem key={user.id || user._id} value={user.id || user._id || ''}>
-                          {user.name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="user">Individual</SelectItem>
+                      <SelectItem value="team">Team</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+                {assignMode === 'user' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="assignedTo">Assignee</Label>
+                    <Select
+                      value={formData.assignedTo}
+                      onValueChange={(value) => setFormData({ ...formData, assignedTo: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select user" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {users.map((user) => (
+                          <SelectItem key={user.id || user._id} value={user.id || user._id || ''}>
+                            {user.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {assignMode === 'team' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="assignedTeam">Team</Label>
+                    <Select
+                      value={formData.assignedTeamId}
+                      onValueChange={(value) => setFormData({ ...formData, assignedTeamId: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select team" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {teams.map((team) => (
+                          <SelectItem key={team._id} value={team._id}>
+                            {team.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {assignMode === 'team' && (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="teamDueDate">Team Due Date</Label>
+                      <Input
+                        id="teamDueDate"
+                        type="date"
+                        value={formData.teamAssignment.dueDate}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            teamAssignment: { ...formData.teamAssignment, dueDate: e.target.value },
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="teamPriority">Team Priority</Label>
+                      <Select
+                        value={formData.teamAssignment.priority}
+                        onValueChange={(value) =>
+                          setFormData({
+                            ...formData,
+                            teamAssignment: { ...formData.teamAssignment, priority: value },
+                          })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select priority" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                          <SelectItem value="critical">Critical</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="teamWorkload">Workload (hrs)</Label>
+                      <Input
+                        id="teamWorkload"
+                        type="number"
+                        min={0}
+                        value={formData.teamAssignment.workload}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            teamAssignment: { ...formData.teamAssignment, workload: e.target.value },
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="teamStatus">Team Status</Label>
+                      <Select
+                        value={formData.teamAssignment.status}
+                        onValueChange={(value) =>
+                          setFormData({
+                            ...formData,
+                            teamAssignment: { ...formData.teamAssignment, status: value },
+                          })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="planned">Planned</SelectItem>
+                          <SelectItem value="in-progress">In Progress</SelectItem>
+                          <SelectItem value="blocked">Blocked</SelectItem>
+                          <SelectItem value="review">Review</SelectItem>
+                          <SelectItem value="done">Done</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="dueDate">Due Date</Label>
                   <Input
@@ -513,22 +713,134 @@ export default function Tasks() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-assignee">Assign To</Label>
-              <Select
-                value={formData.assignedTo}
-                onValueChange={(value) => setFormData({ ...formData, assignedTo: value })}
-              >
+              <Select value={assignMode} onValueChange={(value) => setAssignMode(value as 'user' | 'team')}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {users.map((user) => (
-                    <SelectItem key={user.id || user._id} value={user.id || user._id || ''}>
-                      {user.name}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="user">Individual</SelectItem>
+                  <SelectItem value="team">Team</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            {assignMode === 'user' && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-user">Assignee</Label>
+                <Select
+                  value={formData.assignedTo}
+                  onValueChange={(value) => setFormData({ ...formData, assignedTo: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {users.map((user) => (
+                      <SelectItem key={user.id || user._id} value={user.id || user._id || ''}>
+                        {user.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {assignMode === 'team' && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-team">Team</Label>
+                <Select
+                  value={formData.assignedTeamId}
+                  onValueChange={(value) => setFormData({ ...formData, assignedTeamId: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select team" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teams.map((team) => (
+                      <SelectItem key={team._id} value={team._id}>
+                        {team.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {assignMode === 'team' && (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-team-due">Team Due Date</Label>
+                  <Input
+                    id="edit-team-due"
+                    type="date"
+                    value={formData.teamAssignment.dueDate}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        teamAssignment: { ...formData.teamAssignment, dueDate: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-team-priority">Team Priority</Label>
+                  <Select
+                    value={formData.teamAssignment.priority}
+                    onValueChange={(value) =>
+                      setFormData({
+                        ...formData,
+                        teamAssignment: { ...formData.teamAssignment, priority: value },
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="critical">Critical</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-team-workload">Workload (hrs)</Label>
+                  <Input
+                    id="edit-team-workload"
+                    type="number"
+                    min={0}
+                    value={formData.teamAssignment.workload}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        teamAssignment: { ...formData.teamAssignment, workload: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-team-status">Team Status</Label>
+                  <Select
+                    value={formData.teamAssignment.status}
+                    onValueChange={(value) =>
+                      setFormData({
+                        ...formData,
+                        teamAssignment: { ...formData.teamAssignment, status: value },
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="planned">Planned</SelectItem>
+                      <SelectItem value="in-progress">In Progress</SelectItem>
+                      <SelectItem value="blocked">Blocked</SelectItem>
+                      <SelectItem value="review">Review</SelectItem>
+                      <SelectItem value="done">Done</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="edit-due">Due Date</Label>
               <Input
@@ -601,6 +913,13 @@ function TaskList({
         (() => {
           const isAssignee =
             task.assignedTo?._id === currentUserId || task.assignedTo?.id === currentUserId;
+          const isTeamMember = task.assignedTeamId
+            ? task.assignedTeamId.leadUserId?._id === currentUserId ||
+              task.assignedTeamId.leadUserId?.id === currentUserId ||
+              task.assignedTeamId.memberUserIds?.some(
+                (member) => member._id === currentUserId || member.id === currentUserId
+              )
+            : false;
           return (
         <Card key={task._id} className="hover:shadow-md transition-shadow">
           <CardContent className="p-4">
@@ -625,8 +944,18 @@ function TaskList({
                 <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
                   <span className="flex items-center gap-1">
                     <UserIcon className="h-3.5 w-3.5" />
-                    {task.assignedTo?.name || 'Unassigned'}
+                    {task.assignedTo?.name
+                      ? task.assignedTo.name
+                      : task.assignedTeamId
+                      ? `Team ${task.assignedTeamId.name}`
+                      : 'Unassigned'}
                   </span>
+                  {task.assignedTeamId && task.assignedTo?.name && (
+                    <span className="flex items-center gap-1">
+                      <Users className="h-3.5 w-3.5" />
+                      {task.assignedTeamId.name}
+                    </span>
+                  )}
                   <span className="flex items-center gap-1">
                     <ArrowRight className="h-3.5 w-3.5" />
                     {task.projectId?.name || 'No project'}
@@ -641,7 +970,7 @@ function TaskList({
                 <Button variant="ghost" size="sm" asChild>
                   <Link to={`/tasks/${task._id}`}>Details</Link>
                 </Button>
-                {(isAssignee || isAdmin) && (
+                {(isAssignee || isTeamMember || isAdmin) && (
                   <Button variant="outline" size="sm" asChild>
                     <Link to={`/tasks/${task._id}?update=1`}>Add Update</Link>
                   </Button>

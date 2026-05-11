@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   FolderKanban,
   ListTodo,
+  Users,
   LogOut,
   Menu,
   X,
@@ -24,6 +25,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/projects', label: 'Projects', icon: FolderKanban },
     { path: '/tasks', label: 'Tasks', icon: ListTodo },
+    { path: '/teams', label: 'Teams', icon: Users },
   ];
 
   const isActive = (path: string) => location.pathname === path;

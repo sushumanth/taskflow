@@ -97,10 +97,22 @@ export default function TaskDetails() {
 
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
 
+  const isTeamMember = useMemo(() => {
+    if (!task?.assignedTeamId || !user) return false;
+    const leadId = task.assignedTeamId.leadUserId?._id || task.assignedTeamId.leadUserId?.id;
+    if (leadId && leadId === user._id) return true;
+    return (
+      task.assignedTeamId.memberUserIds?.some(
+        (member) => member._id === user._id || member.id === user._id
+      ) || false
+    );
+  }, [task, user]);
+
   const canSubmitUpdate = useMemo(() => {
     if (!task || !user) return false;
-    return isAdmin || task.assignedTo?._id === user._id || task.assignedTo?.id === user._id;
-  }, [task, user, isAdmin]);
+    const isAssignee = task.assignedTo?._id === user._id || task.assignedTo?.id === user._id;
+    return isAdmin || isAssignee || isTeamMember;
+  }, [task, user, isAdmin, isTeamMember]);
 
   useEffect(() => {
     if (!id) return;
@@ -302,7 +314,8 @@ export default function TaskDetails() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{task.title}</h1>
             <p className="text-sm text-gray-500">
-              Project: {task.projectId?.name || 'No project'} · Assigned to {task.assignedTo?.name}
+              Project: {task.projectId?.name || 'No project'} · Assigned to {task.assignedTo?.name || 'Unassigned'}
+              {task.assignedTeamId?.name ? ` · Team: ${task.assignedTeamId.name}` : ''}
             </p>
           </div>
         </div>

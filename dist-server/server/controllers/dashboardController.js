@@ -1,6 +1,15 @@
 import Task from '../models/Task.js';
 import Project from '../models/Project.js';
 import TaskUpdate from '../models/TaskUpdate.js';
+import Team from '../models/Team.js';
+const getTeamIdsForUser = async (userId) => {
+    if (!userId)
+        return [];
+    const teams = await Team.find({
+        $or: [{ leadUserId: userId }, { memberUserIds: userId }],
+    }).select('_id');
+    return teams.map((team) => team._id.toString());
+};
 export const getDashboardStats = async (req, res) => {
     try {
         const userId = req.user?._id;
@@ -12,7 +21,11 @@ export const getDashboardStats = async (req, res) => {
             taskQuery = { assignedTo: userId };
             projectQuery = { members: { $in: [userId] } };
         }
-        const [totalTasks, completedTasks, pendingTasks, overdueTasks, totalProjects, inProgressTasks, todoTasks, pendingReviews, tasksNeedingAttention, progressAgg,] = await Promise.all([
+        const teamIds = userRole === 'admin' ? [] : await getTeamIdsForUser(userId?.toString());
+        const teamTaskQuery = userRole === 'admin'
+            ? { assignedTeamId: { $ne: null } }
+            : { assignedTeamId: { $in: teamIds } };
+        const [totalTasks, completedTasks, pendingTasks, overdueTasks, totalProjects, inProgressTasks, todoTasks, pendingReviews, tasksNeedingAttention, progressAgg, totalTeams, activeTeams, teamTaskTotals, teamNeedsAttentionAgg,] = await Promise.all([
             Task.countDocuments(taskQuery),
             Task.countDocuments({ ...taskQuery, status: 'done' }),
             Task.countDocuments({ ...taskQuery, status: { $ne: 'done' } }),
@@ -32,8 +45,44 @@ export const getDashboardStats = async (req, res) => {
                 { $match: taskQuery },
                 { $group: { _id: null, avgProgress: { $avg: '$progressPercent' } } },
             ]),
+            Team.countDocuments(userRole === 'admin' ? {} : { _id: { $in: teamIds } }),
+            Team.countDocuments(userRole === 'admin'
+                ? { status: 'active' }
+                : { _id: { $in: teamIds }, status: 'active' }),
+            Task.aggregate([
+                { $match: teamTaskQuery },
+                {
+                    $group: {
+                        _id: null,
+                        total: { $sum: 1 },
+                        completed: {
+                            $sum: {
+                                $cond: [{ $eq: ['$status', 'done'] }, 1, 0],
+                            },
+                        },
+                    },
+                },
+            ]),
+            Task.aggregate([
+                {
+                    $match: {
+                        ...teamTaskQuery,
+                        $or: [
+                            { status: { $in: ['review', 'rejected'] } },
+                            { dueDate: { $lt: today }, status: { $ne: 'done' } },
+                        ],
+                    },
+                },
+                { $group: { _id: '$assignedTeamId' } },
+                { $group: { _id: null, count: { $sum: 1 } } },
+            ]),
         ]);
         const overallProgress = Math.round(progressAgg?.[0]?.avgProgress || 0);
+        const teamAssignedTasks = teamTaskTotals?.[0]?.total || 0;
+        const teamCompletionRate = teamAssignedTasks
+            ? Math.round(((teamTaskTotals?.[0]?.completed || 0) / teamAssignedTasks) * 100)
+            : 0;
+        const teamsNeedingAttention = teamNeedsAttentionAgg?.[0]?.count || 0;
         const recentTasks = await Task.find(taskQuery)
             .populate('projectId', 'name')
             .populate('assignedTo', 'name email')
@@ -61,6 +110,11 @@ export const getDashboardStats = async (req, res) => {
                 pendingReviews,
                 tasksNeedingAttention,
                 overallProgress,
+                totalTeams,
+                activeTeams,
+                teamAssignedTasks,
+                teamCompletionRate,
+                teamsNeedingAttention,
             },
             recentTasks,
             upcomingTasks,

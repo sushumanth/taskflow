@@ -1,14 +1,21 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useAuth } from '../hooks/useAuth';
-import { getProjects, createProject, deleteProject, getAllUsers, addMember, removeMember } from '../services/api';
-import type { Project, User } from '../types';
+import { getProjects, createProject, deleteProject, getAllUsers, addMember, removeMember, getTeams, updateProject, createProjectUpdate } from '../services/api';
+import type { Project, User, Team, TeamAssignment } from '../types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -38,17 +45,22 @@ import {
   X,
   UserPlus,
   Search,
+  ClipboardCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Projects() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isMembersOpen, setIsMembersOpen] = useState(false);
+  const [isAssignOpen, setIsAssignOpen] = useState(false);
+  const [isUpdateOpen, setIsUpdateOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [updateProjectTarget, setUpdateProjectTarget] = useState<Project | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -58,10 +70,26 @@ export default function Projects() {
     members: [] as string[],
   });
 
+  const [assignmentForm, setAssignmentForm] = useState({
+    teamId: '',
+    dueDate: '',
+    priority: 'medium',
+    workload: '',
+    status: 'planned',
+  });
+
+  const [updateForm, setUpdateForm] = useState({
+    progressPercent: 0,
+    status: 'on-track',
+    note: '',
+    blockers: '',
+  });
+
   useEffect(() => {
     fetchProjects();
     if (isAdmin) {
       fetchUsers();
+      fetchTeams();
     }
   }, [isAdmin]);
 
@@ -86,6 +114,17 @@ export default function Projects() {
       }
     } catch (error) {
       console.error('Failed to load users');
+    }
+  };
+
+  const fetchTeams = async () => {
+    try {
+      const response = await getTeams();
+      if (response.success) {
+        setTeams(response.teams || []);
+      }
+    } catch (error) {
+      console.error('Failed to load teams');
     }
   };
 
@@ -139,6 +178,84 @@ export default function Projects() {
       }
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to remove member');
+    }
+  };
+
+  const handleAssignTeam = async () => {
+    if (!selectedProject || !assignmentForm.teamId) return;
+    try {
+      const teamAssignment: TeamAssignment = {
+        dueDate: assignmentForm.dueDate || undefined,
+        priority: assignmentForm.priority as TeamAssignment['priority'],
+        workload: assignmentForm.workload ? Number(assignmentForm.workload) : undefined,
+        status: assignmentForm.status as TeamAssignment['status'],
+      };
+
+      const response = await updateProject(selectedProject._id, {
+        assignedTeamId: assignmentForm.teamId,
+        teamAssignment,
+      });
+      if (response.success) {
+        toast.success('Team assigned to project');
+        setIsAssignOpen(false);
+        setAssignmentForm({
+          teamId: '',
+          dueDate: '',
+          priority: 'medium',
+          workload: '',
+          status: 'planned',
+        });
+        fetchProjects();
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to assign team');
+    }
+  };
+
+  const canUpdateProject = (project: Project) => {
+    if (isAdmin) return true;
+    if (!user) return false;
+    if (project.createdBy?._id === user._id || project.createdBy?.id === user._id) return true;
+
+    const team = project.assignedTeamId;
+    if (!team) return false;
+    const isLead = team.leadUserId?._id === user._id || team.leadUserId?.id === user._id;
+    const isMember = team.memberUserIds?.some(
+      (member) => member._id === user._id || member.id === user._id
+    );
+    return isLead || isMember;
+  };
+
+  const openProjectUpdate = (project: Project) => {
+    setUpdateProjectTarget(project);
+    setUpdateForm({
+      progressPercent: project.progressPercent ?? 0,
+      status: project.lastUpdateStatus || 'on-track',
+      note: '',
+      blockers: '',
+    });
+    setIsUpdateOpen(true);
+  };
+
+  const handleSubmitProjectUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!updateProjectTarget) return;
+    try {
+      const response = await createProjectUpdate(updateProjectTarget._id, {
+        progressPercent: updateForm.progressPercent,
+        status: updateForm.status,
+        note: updateForm.note,
+        blockers: updateForm.blockers || undefined,
+      });
+      if (response.success) {
+        toast.success('Project update submitted');
+        setIsUpdateOpen(false);
+        setUpdateProjectTarget(null);
+        setUpdateForm({ progressPercent: 0, status: 'on-track', note: '', blockers: '' });
+        fetchProjects();
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to submit project update');
     }
   };
 
@@ -254,30 +371,67 @@ export default function Projects() {
                     <p className="text-sm text-gray-500 dark:text-gray-400">
                       Created by {project.createdBy?.name || 'Unknown'}
                     </p>
+                    {project.assignedTeamId && (
+                      <p className="text-xs text-gray-500">
+                        Team: {project.assignedTeamId.name}
+                      </p>
+                    )}
                   </div>
-                  {isAdmin && (
-                    <div className="flex gap-1 ml-2 shrink-0">
+                  <div className="flex gap-1 ml-2 shrink-0">
+                    {canUpdateProject(project) && (
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-gray-500 hover:text-blue-600"
-                        onClick={() => {
-                          setSelectedProject(project);
-                          setIsMembersOpen(true);
-                        }}
+                        className="h-8 w-8 text-gray-500 hover:text-emerald-600"
+                        onClick={() => openProjectUpdate(project)}
                       >
-                        <Users className="h-4 w-4" />
+                        <ClipboardCheck className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-gray-500 hover:text-red-600"
-                        onClick={() => setDeleteId(project._id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  )}
+                    )}
+                    {isAdmin && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-gray-500 hover:text-emerald-600"
+                          onClick={() => {
+                            setSelectedProject(project);
+                            setAssignmentForm({
+                              teamId: project.assignedTeamId?._id || '',
+                              dueDate: project.teamAssignment?.dueDate
+                                ? new Date(project.teamAssignment.dueDate).toISOString().split('T')[0]
+                                : '',
+                              priority: project.teamAssignment?.priority || 'medium',
+                              workload: project.teamAssignment?.workload?.toString() || '',
+                              status: project.teamAssignment?.status || 'planned',
+                            });
+                            setIsAssignOpen(true);
+                          }}
+                        >
+                          <Users className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-gray-500 hover:text-blue-600"
+                          onClick={() => {
+                            setSelectedProject(project);
+                            setIsMembersOpen(true);
+                          }}
+                        >
+                          <Users className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-gray-500 hover:text-red-600"
+                          onClick={() => setDeleteId(project._id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -302,12 +456,20 @@ export default function Projects() {
                       {project.members?.length || 0} members
                     </span>
                   </div>
-                  <Link
-                    to={`/tasks?projectId=${project._id}`}
-                    className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline"
-                  >
-                    View Tasks <ArrowRight className="h-3 w-3" />
-                  </Link>
+                  <div className="flex items-center gap-3">
+                    <Link
+                      to={`/projects/${project._id}`}
+                      className="text-sm font-medium text-gray-700 hover:underline"
+                    >
+                      Details
+                    </Link>
+                    <Link
+                      to={`/tasks?projectId=${project._id}`}
+                      className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline"
+                    >
+                      View Tasks <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -395,6 +557,163 @@ export default function Projects() {
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign Team Dialog */}
+      <Dialog open={isAssignOpen} onOpenChange={setIsAssignOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign Team</DialogTitle>
+            <DialogDescription>{selectedProject?.name}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="teamId">Team</Label>
+              <Select
+                value={assignmentForm.teamId}
+                onValueChange={(value) => setAssignmentForm({ ...assignmentForm, teamId: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select team" />
+                </SelectTrigger>
+                <SelectContent>
+                  {teams.map((team) => (
+                    <SelectItem key={team._id} value={team._id}>
+                      {team.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="assign-due">Team Due Date</Label>
+                <Input
+                  id="assign-due"
+                  type="date"
+                  value={assignmentForm.dueDate}
+                  onChange={(e) => setAssignmentForm({ ...assignmentForm, dueDate: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="assign-priority">Priority</Label>
+                <Select
+                  value={assignmentForm.priority}
+                  onValueChange={(value) => setAssignmentForm({ ...assignmentForm, priority: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="assign-workload">Workload (hrs)</Label>
+                <Input
+                  id="assign-workload"
+                  type="number"
+                  min={0}
+                  value={assignmentForm.workload}
+                  onChange={(e) => setAssignmentForm({ ...assignmentForm, workload: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="assign-status">Status</Label>
+                <Select
+                  value={assignmentForm.status}
+                  onValueChange={(value) => setAssignmentForm({ ...assignmentForm, status: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="planned">Planned</SelectItem>
+                    <SelectItem value="in-progress">In Progress</SelectItem>
+                    <SelectItem value="blocked">Blocked</SelectItem>
+                    <SelectItem value="review">Review</SelectItem>
+                    <SelectItem value="done">Done</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={handleAssignTeam} disabled={!assignmentForm.teamId}>
+                Assign Team
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Project Update Dialog */}
+      <Dialog open={isUpdateOpen} onOpenChange={setIsUpdateOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Project Update</DialogTitle>
+            <DialogDescription>{updateProjectTarget?.name}</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmitProjectUpdate} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="project-progress">Progress (%)</Label>
+              <Input
+                id="project-progress"
+                type="number"
+                min={0}
+                max={100}
+                value={updateForm.progressPercent}
+                onChange={(e) =>
+                  setUpdateForm({ ...updateForm, progressPercent: Number(e.target.value) })
+                }
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="project-status">Status</Label>
+              <Select
+                value={updateForm.status}
+                onValueChange={(value) => setUpdateForm({ ...updateForm, status: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="on-track">On Track</SelectItem>
+                  <SelectItem value="at-risk">At Risk</SelectItem>
+                  <SelectItem value="delayed">Delayed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="project-note">Update Note</Label>
+              <Textarea
+                id="project-note"
+                value={updateForm.note}
+                onChange={(e) => setUpdateForm({ ...updateForm, note: e.target.value })}
+                placeholder="Share key progress and highlights"
+                rows={3}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="project-blockers">Blockers</Label>
+              <Textarea
+                id="project-blockers"
+                value={updateForm.blockers}
+                onChange={(e) => setUpdateForm({ ...updateForm, blockers: e.target.value })}
+                placeholder="Anything blocking progress?"
+                rows={2}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="submit">Submit Update</Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

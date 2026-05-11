@@ -19,7 +19,27 @@ const TaskSchema = new Schema({
     assignedTo: {
         type: Schema.Types.ObjectId,
         ref: 'User',
-        required: [true, 'Assignee is required'],
+    },
+    assignedTeamId: {
+        type: Schema.Types.ObjectId,
+        ref: 'Team',
+    },
+    teamAssignment: {
+        dueDate: {
+            type: Date,
+        },
+        priority: {
+            type: String,
+            enum: ['low', 'medium', 'high', 'critical'],
+        },
+        workload: {
+            type: Number,
+            min: 0,
+        },
+        status: {
+            type: String,
+            enum: ['planned', 'in-progress', 'blocked', 'review', 'done'],
+        },
     },
     status: {
         type: String,

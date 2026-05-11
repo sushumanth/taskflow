@@ -6,8 +6,11 @@ import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
 import Projects from './pages/Projects'
+import ProjectDetails from './pages/ProjectDetails'
 import Tasks from './pages/Tasks'
 import TaskDetails from './pages/TaskDetails'
+import Teams from './pages/Teams'
+import TeamDetails from './pages/TeamDetails'
 
 function AppRoutes() {
   const { isAuthenticated, isLoading } = useAuth()
@@ -45,6 +48,16 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/projects/:id"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <ProjectDetails />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/tasks"
         element={
           <ProtectedRoute>
@@ -60,6 +73,26 @@ function AppRoutes() {
           <ProtectedRoute>
             <MainLayout>
               <TaskDetails />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teams"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <Teams />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teams/:id"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <TeamDetails />
             </MainLayout>
           </ProtectedRoute>
         }

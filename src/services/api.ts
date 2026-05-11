@@ -9,6 +9,13 @@ import type {
   TaskUpdate,
   ReviewStatus,
   Notification,
+  Team,
+  TeamUpdate,
+  TeamActivity,
+  TeamPerformanceSummary,
+  TeamAssignment,
+  ProjectUpdate,
+  ProjectActivity,
 } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -63,7 +70,7 @@ export const getAllUsers = async (): Promise<ApiResponse<{ users: User[] }>> => 
 };
 
 // Projects
-export const createProject = async (data: { name: string; description: string; members?: string[] }): Promise<ApiResponse<{ project: Project }>> => {
+export const createProject = async (data: { name: string; description: string; members?: string[]; assignedTeamId?: string; teamAssignment?: TeamAssignment }): Promise<ApiResponse<{ project: Project }>> => {
   const response = await api.post('/projects', data);
   return response.data;
 };
@@ -78,7 +85,7 @@ export const getProjectById = async (id: string): Promise<ApiResponse<{ project:
   return response.data;
 };
 
-export const updateProject = async (id: string, data: { name?: string; description?: string }): Promise<ApiResponse<{ project: Project }>> => {
+export const updateProject = async (id: string, data: { name?: string; description?: string; assignedTeamId?: string; teamAssignment?: TeamAssignment }): Promise<ApiResponse<{ project: Project }>> => {
   const response = await api.put(`/projects/${id}`, data);
   return response.data;
 };
@@ -98,8 +105,52 @@ export const removeMember = async (projectId: string, userId: string): Promise<A
   return response.data;
 };
 
+// Project Updates
+export const getProjectUpdates = async (projectId: string): Promise<ApiResponse<{ updates: ProjectUpdate[] }>> => {
+  const response = await api.get(`/project-updates/${projectId}`);
+  return {
+    ...response.data,
+    data: { updates: response.data.updates },
+    projectUpdates: response.data.updates,
+  };
+};
+
+export const createProjectUpdate = async (
+  projectId: string,
+  data: { progressPercent: number; status: string; note: string; blockers?: string }
+): Promise<ApiResponse<{ update: ProjectUpdate }>> => {
+  const response = await api.post(`/project-updates/${projectId}`, data);
+  return {
+    ...response.data,
+    data: { update: response.data.update },
+    projectUpdate: response.data.update,
+  };
+};
+
+export const addProjectUpdateComment = async (
+  projectId: string,
+  updateId: string,
+  text: string
+): Promise<ApiResponse<{ update: ProjectUpdate }>> => {
+  const response = await api.post(`/project-updates/${projectId}/comments/${updateId}`, { text });
+  return {
+    ...response.data,
+    data: { update: response.data.update },
+    projectUpdate: response.data.update,
+  };
+};
+
+export const getProjectActivity = async (projectId: string): Promise<ApiResponse<{ activities: ProjectActivity[] }>> => {
+  const response = await api.get(`/project-updates/${projectId}/activity`);
+  return {
+    ...response.data,
+    data: { activities: response.data.activities },
+    projectActivities: response.data.activities,
+  };
+};
+
 // Tasks
-export const createTask = async (data: { title: string; description: string; projectId: string; assignedTo: string; dueDate: string }): Promise<ApiResponse<{ task: Task }>> => {
+export const createTask = async (data: { title: string; description: string; projectId: string; assignedTo?: string; assignedTeamId?: string; teamAssignment?: TeamAssignment; dueDate: string }): Promise<ApiResponse<{ task: Task }>> => {
   const response = await api.post('/tasks', data);
   return response.data;
 };
@@ -114,7 +165,7 @@ export const getTaskById = async (id: string): Promise<ApiResponse<{ task: Task 
   return response.data;
 };
 
-export const updateTask = async (id: string, data: { title?: string; description?: string; assignedTo?: string; status?: string; dueDate?: string }): Promise<ApiResponse<{ task: Task }>> => {
+export const updateTask = async (id: string, data: { title?: string; description?: string; assignedTo?: string; assignedTeamId?: string; teamAssignment?: TeamAssignment; status?: string; dueDate?: string }): Promise<ApiResponse<{ task: Task }>> => {
   const response = await api.put(`/tasks/${id}`, data);
   return response.data;
 };
@@ -192,6 +243,87 @@ export const markAllNotificationsRead = async (): Promise<ApiResponse<void>> => 
 // Dashboard
 export const getDashboardStats = async (): Promise<ApiResponse<{ stats: DashboardStats; recentTasks: Task[]; upcomingTasks: Task[] }>> => {
   const response = await api.get('/dashboard/stats');
+  return response.data;
+};
+
+// Teams
+export const createTeam = async (data: { name: string; description?: string; type?: string; leadUserId: string; memberUserIds?: string[]; status?: string }): Promise<ApiResponse<{ team: Team }>> => {
+  const response = await api.post('/teams', data);
+  return response.data;
+};
+
+export const getTeams = async (params?: { status?: string; leadUserId?: string }): Promise<ApiResponse<{ teams: Team[] }>> => {
+  const response = await api.get('/teams', { params });
+  return response.data;
+};
+
+export const getTeamById = async (id: string): Promise<ApiResponse<{ team: Team; tasks: Task[]; projects: Project[]; latestUpdate?: TeamUpdate }>> => {
+  const response = await api.get(`/teams/${id}`);
+  return response.data;
+};
+
+export const updateTeam = async (id: string, data: { name?: string; description?: string; type?: string; status?: string }): Promise<ApiResponse<{ team: Team }>> => {
+  const response = await api.put(`/teams/${id}`, data);
+  return response.data;
+};
+
+export const deleteTeam = async (id: string): Promise<ApiResponse<void>> => {
+  const response = await api.delete(`/teams/${id}`);
+  return response.data;
+};
+
+export const addTeamMember = async (teamId: string, userId: string): Promise<ApiResponse<{ team: Team }>> => {
+  const response = await api.put(`/teams/${teamId}/members`, { userId });
+  return response.data;
+};
+
+export const removeTeamMember = async (teamId: string, userId: string): Promise<ApiResponse<{ team: Team }>> => {
+  const response = await api.delete(`/teams/${teamId}/members`, { data: { userId } });
+  return response.data;
+};
+
+export const changeTeamLead = async (teamId: string, leadUserId: string): Promise<ApiResponse<{ team: Team }>> => {
+  const response = await api.put(`/teams/${teamId}/lead`, { leadUserId });
+  return response.data;
+};
+
+export const assignTaskToTeam = async (teamId: string, taskId: string, teamAssignment?: TeamAssignment): Promise<ApiResponse<{ task: Task }>> => {
+  const response = await api.post(`/teams/${teamId}/assign-task`, { taskId, teamAssignment });
+  return response.data;
+};
+
+export const assignProjectToTeam = async (teamId: string, projectId: string, teamAssignment?: TeamAssignment): Promise<ApiResponse<{ project: Project }>> => {
+  const response = await api.post(`/teams/${teamId}/assign-project`, { projectId, teamAssignment });
+  return response.data;
+};
+
+export const getTeamProgress = async (teamId: string): Promise<ApiResponse<{ progress: { progressPercent: number; totalTasks: number; completedTasks: number; overdueTasks: number } }>> => {
+  const response = await api.get(`/teams/${teamId}/progress`);
+  return response.data;
+};
+
+export const getTeamActivity = async (teamId: string): Promise<ApiResponse<{ activities: TeamActivity[]; updates: TeamUpdate[] }>> => {
+  const response = await api.get(`/teams/${teamId}/activity`);
+  return response.data;
+};
+
+export const getTeamPerformance = async (teamId: string): Promise<ApiResponse<{ performance: TeamPerformanceSummary }>> => {
+  const response = await api.get(`/teams/${teamId}/performance`);
+  return response.data;
+};
+
+export const getTeamUpdates = async (teamId: string): Promise<ApiResponse<{ updates: TeamUpdate[] }>> => {
+  const response = await api.get(`/team-updates/${teamId}`);
+  return response.data;
+};
+
+export const createTeamUpdate = async (teamId: string, data: { progressPercent: number; status: string; note: string; blockers?: string }): Promise<ApiResponse<{ update: TeamUpdate }>> => {
+  const response = await api.post(`/team-updates/${teamId}`, data);
+  return response.data;
+};
+
+export const addTeamUpdateComment = async (teamId: string, updateId: string, text: string): Promise<ApiResponse<{ update: TeamUpdate }>> => {
+  const response = await api.post(`/team-updates/${teamId}/comments/${updateId}`, { text });
   return response.data;
 };
 

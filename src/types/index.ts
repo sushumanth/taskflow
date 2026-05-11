@@ -12,7 +12,12 @@ export interface Project {
   description: string;
   createdBy: User;
   members: User[];
+  assignedTeamId?: Team;
+  teamAssignment?: TeamAssignment;
   progressPercent?: number;
+  lastUpdateAt?: string;
+  lastUpdatedBy?: User;
+  lastUpdateStatus?: 'on-track' | 'at-risk' | 'delayed';
   taskCount?: number;
   completedTasks?: number;
   createdAt: string;
@@ -31,7 +36,9 @@ export interface Task {
     _id: string;
     name: string;
   };
-  assignedTo: User;
+  assignedTo?: User;
+  assignedTeamId?: Team;
+  teamAssignment?: TeamAssignment;
   status: TaskStatus;
   progressPercent?: number;
   lastUpdateAt?: string;
@@ -90,6 +97,106 @@ export interface Notification {
   updatedAt: string;
 }
 
+export interface TeamAssignment {
+  dueDate?: string;
+  priority?: 'low' | 'medium' | 'high' | 'critical';
+  workload?: number;
+  status?: 'planned' | 'in-progress' | 'blocked' | 'review' | 'done';
+}
+
+export interface Team {
+  _id: string;
+  name: string;
+  description?: string;
+  type?: string;
+  leadUserId: User;
+  memberUserIds: User[];
+  status: 'active' | 'inactive';
+  createdBy: User;
+  assignedProjects?: string[];
+  assignedTasks?: string[];
+  progressPercent?: number;
+  taskCount?: number;
+  completedTasks?: number;
+  projectCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TeamUpdateComment {
+  user: User;
+  text: string;
+  createdAt: string;
+}
+
+export interface TeamUpdate {
+  _id: string;
+  teamId: string | Team;
+  submittedBy: User;
+  progressPercent: number;
+  status: 'on-track' | 'at-risk' | 'delayed';
+  note: string;
+  blockers?: string;
+  comments: TeamUpdateComment[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TeamActivity {
+  _id: string;
+  teamId: string | Team;
+  actor: User;
+  type:
+    | 'team_created'
+    | 'team_updated'
+    | 'member_added'
+    | 'member_removed'
+    | 'lead_changed'
+    | 'assignment_added'
+    | 'assignment_removed'
+    | 'team_update_submitted';
+  message: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TeamPerformanceSummary {
+  progressPercent: number;
+  totalTasks: number;
+  completedTasks: number;
+  reviewTasks: number;
+  memberContributions: { _id: string; updates: number }[];
+}
+
+export interface ProjectUpdateComment {
+  user: User;
+  text: string;
+  createdAt: string;
+}
+
+export interface ProjectUpdate {
+  _id: string;
+  projectId: string | Project;
+  submittedBy: User;
+  progressPercent: number;
+  status: 'on-track' | 'at-risk' | 'delayed';
+  note: string;
+  blockers?: string;
+  comments: ProjectUpdateComment[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectActivity {
+  _id: string;
+  projectId: string | Project;
+  actor: User;
+  type: 'project_update_submitted' | 'comment_added';
+  message: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DashboardStats {
   totalTasks: number;
   completedTasks: number;
@@ -101,6 +208,11 @@ export interface DashboardStats {
   pendingReviews: number;
   tasksNeedingAttention: number;
   overallProgress: number;
+  totalTeams?: number;
+  activeTeams?: number;
+  teamAssignedTasks?: number;
+  teamCompletionRate?: number;
+  teamsNeedingAttention?: number;
 }
 
 export interface ApiResponse<T> {
@@ -113,6 +225,14 @@ export interface ApiResponse<T> {
   projects?: Project[];
   task?: Task;
   tasks?: Task[];
+  team?: Team;
+  teams?: Team[];
+  projectUpdate?: ProjectUpdate;
+  projectUpdates?: ProjectUpdate[];
+  projectActivities?: ProjectActivity[];
+  teamUpdate?: TeamUpdate;
+  teamUpdates?: TeamUpdate[];
+  activities?: TeamActivity[];
   update?: TaskUpdate;
   updates?: TaskUpdate[];
   notification?: Notification;

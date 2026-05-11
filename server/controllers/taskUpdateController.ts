@@ -1,3 +1,4 @@
+
 import { Response } from 'express';
 import Task from '../models/Task.js';
 import TaskUpdate from '../models/TaskUpdate.js';
@@ -5,12 +6,20 @@ import Project from '../models/Project.js';
 import Notification from '../models/Notification.js';
 import ActivityLog from '../models/ActivityLog.js';
 import User from '../models/User.js';
+import Team from '../models/Team.js';
 import { AuthRequest } from '../middleware/auth.js';
 
 const allowedStatuses = new Set(['todo', 'in-progress', 'review', 'done', 'rejected']);
 const allowedReviewStatuses = new Set(['approved', 'rejected', 'changes-requested']);
 
-type AuthRequestWithFiles = AuthRequest & { files?: Express.Multer.File[] };
+type MulterFile = {
+  filename: string;
+  originalname: string;
+  mimetype: string;
+  size: number;
+};
+
+type AuthRequestWithFiles = AuthRequest & { files?: MulterFile[] };
 
 const getParamId = (param: string | string[] | undefined): string => {
   if (Array.isArray(param)) return param[0] || '';
@@ -28,21 +37,39 @@ const canViewTask = async (taskId: string, userId: string, role?: string): Promi
 
   if (role === 'admin') return true;
 
-  if (task.assignedTo.toString() === userId) return true;
+  if (task.assignedTo?.toString() === userId) return true;
+
+  if (task.assignedTeamId) {
+    const isTeamMember = await Team.exists({
+      _id: task.assignedTeamId,
+      $or: [{ leadUserId: userId }, { memberUserIds: userId }],
+    });
+    if (isTeamMember) return true;
+  }
 
   const project = await Project.findById(task.projectId).select('createdBy');
   return project?.createdBy.toString() === userId;
 };
 
 const canSubmitUpdate = async (taskId: string, userId: string, role?: string): Promise<boolean> => {
-  const task = await Task.findById(taskId).select('assignedTo');
+  const task = await Task.findById(taskId).select('assignedTo assignedTeamId');
   if (!task) return false;
 
   if (role === 'admin') return true;
-  return task.assignedTo.toString() === userId;
+  if (task.assignedTo?.toString() === userId) return true;
+
+  if (task.assignedTeamId) {
+    const isTeamMember = await Team.exists({
+      _id: task.assignedTeamId,
+      $or: [{ leadUserId: userId }, { memberUserIds: userId }],
+    });
+    return Boolean(isTeamMember);
+  }
+
+  return false;
 };
 
-const buildAttachments = (files: Express.Multer.File[]) =>
+const buildAttachments = (files: MulterFile[]) =>
   files.map((file) => ({
     url: `/uploads/task-updates/${file.filename}`,
     filename: file.filename,

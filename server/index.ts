@@ -10,6 +10,9 @@ import taskRoutes from './routes/tasks.js';
 import dashboardRoutes from './routes/dashboard.js';
 import taskUpdateRoutes from './routes/taskUpdates.js';
 import notificationRoutes from './routes/notifications.js';
+import teamRoutes from './routes/teams.js';
+import teamUpdateRoutes from './routes/teamUpdates.js';
+import projectUpdateRoutes from './routes/projectUpdates.js';
 
 const app = express();
 
@@ -29,6 +32,9 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/task-updates', taskUpdateRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/teams', teamRoutes);
+app.use('/api/team-updates', teamUpdateRoutes);
+app.use('/api/project-updates', projectUpdateRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

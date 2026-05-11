@@ -4,6 +4,7 @@ import Project from '../models/Project.js';
 import Notification from '../models/Notification.js';
 import ActivityLog from '../models/ActivityLog.js';
 import User from '../models/User.js';
+import Team from '../models/Team.js';
 const allowedStatuses = new Set(['todo', 'in-progress', 'review', 'done', 'rejected']);
 const allowedReviewStatuses = new Set(['approved', 'rejected', 'changes-requested']);
 const getParamId = (param) => {
@@ -22,18 +23,35 @@ const canViewTask = async (taskId, userId, role) => {
         return false;
     if (role === 'admin')
         return true;
-    if (task.assignedTo.toString() === userId)
+    if (task.assignedTo?.toString() === userId)
         return true;
+    if (task.assignedTeamId) {
+        const isTeamMember = await Team.exists({
+            _id: task.assignedTeamId,
+            $or: [{ leadUserId: userId }, { memberUserIds: userId }],
+        });
+        if (isTeamMember)
+            return true;
+    }
     const project = await Project.findById(task.projectId).select('createdBy');
     return project?.createdBy.toString() === userId;
 };
 const canSubmitUpdate = async (taskId, userId, role) => {
-    const task = await Task.findById(taskId).select('assignedTo');
+    const task = await Task.findById(taskId).select('assignedTo assignedTeamId');
     if (!task)
         return false;
     if (role === 'admin')
         return true;
-    return task.assignedTo.toString() === userId;
+    if (task.assignedTo?.toString() === userId)
+        return true;
+    if (task.assignedTeamId) {
+        const isTeamMember = await Team.exists({
+            _id: task.assignedTeamId,
+            $or: [{ leadUserId: userId }, { memberUserIds: userId }],
+        });
+        return Boolean(isTeamMember);
+    }
+    return false;
 };
 const buildAttachments = (files) => files.map((file) => ({
     url: `/uploads/task-updates/${file.filename}`,

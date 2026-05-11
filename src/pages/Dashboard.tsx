@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getDashboardStats } from '../services/api';
 import type { DashboardStats, Task } from '../types';
+import { useAuth } from '../hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -20,6 +21,7 @@ import { Link } from 'react-router';
 import { format } from 'date-fns';
 
 export default function Dashboard() {
+  const { isAdmin } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentTasks, setRecentTasks] = useState<Task[]>([]);
   const [upcomingTasks, setUpcomingTasks] = useState<Task[]>([]);
@@ -110,6 +112,46 @@ export default function Dashboard() {
       bg: 'bg-emerald-50 dark:bg-emerald-900/20',
     },
   ];
+
+  if (isAdmin) {
+    statCards.push(
+      {
+        title: 'Total Teams',
+        value: stats?.totalTeams || 0,
+        icon: LayoutDashboard,
+        color: 'text-sky-600',
+        bg: 'bg-sky-50 dark:bg-sky-900/20',
+      },
+      {
+        title: 'Active Teams',
+        value: stats?.activeTeams || 0,
+        icon: CheckCircle2,
+        color: 'text-teal-600',
+        bg: 'bg-teal-50 dark:bg-teal-900/20',
+      },
+      {
+        title: 'Team Tasks',
+        value: stats?.teamAssignedTasks || 0,
+        icon: ListTodo,
+        color: 'text-indigo-600',
+        bg: 'bg-indigo-50 dark:bg-indigo-900/20',
+      },
+      {
+        title: 'Team Completion',
+        value: `${stats?.teamCompletionRate || 0}%`,
+        icon: TrendingUp,
+        color: 'text-lime-600',
+        bg: 'bg-lime-50 dark:bg-lime-900/20',
+      },
+      {
+        title: 'Teams Needing Attention',
+        value: stats?.teamsNeedingAttention || 0,
+        icon: AlertTriangle,
+        color: 'text-rose-600',
+        bg: 'bg-rose-50 dark:bg-rose-900/20',
+      }
+    );
+  }
 
   const getStatusBadge = (status: string) => {
     switch (status) {

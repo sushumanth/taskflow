@@ -6,7 +6,14 @@ export interface ITask extends Document {
   title: string;
   description: string;
   projectId: mongoose.Types.ObjectId;
-  assignedTo: mongoose.Types.ObjectId;
+  assignedTo?: mongoose.Types.ObjectId;
+  assignedTeamId?: mongoose.Types.ObjectId;
+  teamAssignment?: {
+    dueDate?: Date;
+    priority?: 'low' | 'medium' | 'high' | 'critical';
+    workload?: number;
+    status?: 'planned' | 'in-progress' | 'blocked' | 'review' | 'done';
+  };
   status: TaskStatus;
   progressPercent: number;
   lastUpdateAt?: Date;
@@ -40,7 +47,27 @@ const TaskSchema: Schema = new Schema(
     assignedTo: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'Assignee is required'],
+    },
+    assignedTeamId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Team',
+    },
+    teamAssignment: {
+      dueDate: {
+        type: Date,
+      },
+      priority: {
+        type: String,
+        enum: ['low', 'medium', 'high', 'critical'],
+      },
+      workload: {
+        type: Number,
+        min: 0,
+      },
+      status: {
+        type: String,
+        enum: ['planned', 'in-progress', 'blocked', 'review', 'done'],
+      },
     },
     status: {
       type: String,
