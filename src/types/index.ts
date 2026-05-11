@@ -89,7 +89,17 @@ export interface Notification {
   _id: string;
   title: string;
   message: string;
-  type: 'update_submitted' | 'update_approved' | 'update_rejected' | 'feedback' | 'changes_requested';
+  type:
+    | 'task_assigned'
+    | 'deadline_alert'
+    | 'project_update'
+    | 'team_update'
+    | 'review_requested'
+    | 'update_submitted'
+    | 'update_approved'
+    | 'update_rejected'
+    | 'feedback'
+    | 'changes_requested';
   taskId?: string;
   updateId?: string;
   isRead: boolean;

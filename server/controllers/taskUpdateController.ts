@@ -81,7 +81,7 @@ const buildAttachments = (files: MulterFile[]) =>
 const notifyAdmins = async (payload: {
   title: string;
   message: string;
-  type: 'update_submitted' | 'feedback';
+  type: 'update_submitted' | 'review_requested' | 'feedback';
   taskId: string;
   updateId: string;
 }) => {
@@ -131,7 +131,7 @@ const recalculateTaskProgress = async (taskId: string) => {
   }
 
   task.progressPercent = latestUpdate.progressPercent;
-  task.status = latestUpdate.status;
+  task.status = latestUpdate.review?.status === 'pending' ? 'review' : latestUpdate.status;
   task.lastUpdateAt = latestUpdate.createdAt;
   task.lastUpdatedBy = latestUpdate.submittedBy;
   await task.save();
@@ -217,9 +217,9 @@ export const createTaskUpdate = async (req: AuthRequest, res: Response): Promise
     });
 
     await notifyAdmins({
-      title: 'New task update submitted',
+      title: 'Task update needs review',
       message: `${req.user?.name} submitted a task update for review.`,
-      type: 'update_submitted',
+      type: 'review_requested',
       taskId,
       updateId: update._id.toString(),
     });

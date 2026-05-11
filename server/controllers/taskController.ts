@@ -3,6 +3,7 @@ import Task from '../models/Task.js';
 import Project from '../models/Project.js';
 import TaskUpdate from '../models/TaskUpdate.js';
 import Team from '../models/Team.js';
+import Notification from '../models/Notification.js';
 import { AuthRequest } from '../middleware/auth.js';
 
 const getTeamIdsForUser = async (userId?: string) => {
@@ -26,6 +27,52 @@ const ensureTeamMembersInProject = async (project: any, teamId: string) => {
       project.members.push(id);
     }
   });
+};
+
+const notifyUsers = async (
+  userIds: string[],
+  payload: { title: string; message: string; type: 'task_assigned' | 'deadline_alert'; taskId: string }
+) => {
+  const uniqueIds = Array.from(new Set(userIds.filter(Boolean)));
+  if (uniqueIds.length === 0) return;
+
+  const notifications = uniqueIds.map((user) => ({
+    user,
+    title: payload.title,
+    message: payload.message,
+    type: payload.type,
+    taskId: payload.taskId,
+  }));
+
+  await Notification.insertMany(notifications);
+};
+
+const notifyDeadlineIfNeeded = async (
+  userIds: string[],
+  taskId: string,
+  dueDate?: Date,
+  title?: string
+) => {
+  if (!dueDate) return;
+  const now = new Date();
+  const cutoff = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  if (dueDate > cutoff) return;
+
+  for (const user of userIds) {
+    const existing = await Notification.findOne({
+      user,
+      taskId,
+      type: 'deadline_alert',
+    }).select('_id');
+    if (existing) continue;
+    await Notification.create({
+      user,
+      title: 'Task deadline approaching',
+      message: title ? `${title} is due soon.` : 'A task is due soon.',
+      type: 'deadline_alert',
+      taskId,
+    });
+  }
 };
 
 export const createTask = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -60,12 +107,14 @@ export const createTask = async (req: AuthRequest, res: Response): Promise<void>
       project.members.push(assignedTo);
     }
 
+    let assignedTeamMembers: string[] = [];
     if (assignedTeamId) {
-      const team = await Team.findById(assignedTeamId).select('_id');
+      const team = await Team.findById(assignedTeamId).select('leadUserId memberUserIds');
       if (!team) {
         res.status(404).json({ success: false, message: 'Team not found' });
         return;
       }
+      assignedTeamMembers = [team.leadUserId, ...team.memberUserIds].map((id) => id.toString());
       await ensureTeamMembersInProject(project, assignedTeamId);
     }
 
@@ -89,6 +138,26 @@ export const createTask = async (req: AuthRequest, res: Response): Promise<void>
       .populate('projectId', 'name')
       .populate('assignedTo', 'name email')
       .populate('assignedTeamId', 'name leadUserId memberUserIds status');
+
+    if (assignedTo) {
+      await notifyUsers([assignedTo], {
+        title: 'New task assigned',
+        message: `You have been assigned: ${task.title}.`,
+        type: 'task_assigned',
+        taskId: task._id.toString(),
+      });
+      await notifyDeadlineIfNeeded([assignedTo], task._id.toString(), task.dueDate, task.title);
+    }
+
+    if (assignedTeamMembers.length > 0) {
+      await notifyUsers(assignedTeamMembers, {
+        title: 'New team task assigned',
+        message: `Your team has been assigned: ${task.title}.`,
+        type: 'task_assigned',
+        taskId: task._id.toString(),
+      });
+      await notifyDeadlineIfNeeded(assignedTeamMembers, task._id.toString(), task.dueDate, task.title);
+    }
 
     res.status(201).json({ success: true, task: populatedTask });
   } catch (error) {
@@ -200,6 +269,8 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
         return;
       }
     } else {
+      const previousAssignedTo = task.assignedTo?.toString();
+      const previousAssignedTeamId = task.assignedTeamId?.toString();
       if (title) task.title = title;
       if (description !== undefined) task.description = description;
       if (assignedTo !== undefined) task.assignedTo = assignedTo || undefined;
@@ -225,6 +296,42 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
         task.status = status;
       }
       if (dueDate) task.dueDate = new Date(dueDate);
+
+      const assignedTeamMembers: string[] = [];
+      if (assignedTeamId) {
+        const team = await Team.findById(assignedTeamId).select('leadUserId memberUserIds');
+        if (team) {
+          assignedTeamMembers.push(
+            ...[team.leadUserId, ...team.memberUserIds].map((id) => id.toString())
+          );
+        }
+      }
+
+      if (assignedTo && assignedTo !== previousAssignedTo) {
+        await notifyUsers([assignedTo], {
+          title: 'Task assigned',
+          message: `You have been assigned: ${task.title}.`,
+          type: 'task_assigned',
+          taskId: task._id.toString(),
+        });
+      }
+
+      if (assignedTeamId && assignedTeamId !== previousAssignedTeamId) {
+        await notifyUsers(assignedTeamMembers, {
+          title: 'Team task assigned',
+          message: `Your team has been assigned: ${task.title}.`,
+          type: 'task_assigned',
+          taskId: task._id.toString(),
+        });
+      }
+
+      const dueDateValue = dueDate ? new Date(dueDate) : task.dueDate;
+      const deadlineRecipients = assignedTo
+        ? [assignedTo]
+        : assignedTeamMembers;
+      if (deadlineRecipients.length > 0) {
+        await notifyDeadlineIfNeeded(deadlineRecipients, task._id.toString(), dueDateValue, task.title);
+      }
     }
 
     await task.save();

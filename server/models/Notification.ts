@@ -1,6 +1,11 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export type NotificationType =
+  | 'task_assigned'
+  | 'deadline_alert'
+  | 'project_update'
+  | 'team_update'
+  | 'review_requested'
   | 'update_submitted'
   | 'update_approved'
   | 'update_rejected'
@@ -40,7 +45,18 @@ const NotificationSchema: Schema = new Schema(
     },
     type: {
       type: String,
-      enum: ['update_submitted', 'update_approved', 'update_rejected', 'feedback', 'changes_requested'],
+      enum: [
+        'task_assigned',
+        'deadline_alert',
+        'project_update',
+        'team_update',
+        'review_requested',
+        'update_submitted',
+        'update_approved',
+        'update_rejected',
+        'feedback',
+        'changes_requested',
+      ],
       required: [true, 'Notification type is required'],
     },
     taskId: {

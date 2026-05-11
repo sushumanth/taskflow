@@ -20,7 +20,7 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
       return;
     }
 
-    const { name, email, password, role } = req.body;
+    const { name, email, password } = req.body;
 
     const userExists = await User.findOne({ email });
     if (userExists) {
@@ -35,7 +35,7 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
       name,
       email,
       password: hashedPassword,
-      role: role || 'member',
+      role: 'member',
     });
 
     const token = generateToken(user._id.toString());

@@ -217,6 +217,10 @@ export default function Projects() {
     if (!user) return false;
     if (project.createdBy?._id === user._id || project.createdBy?.id === user._id) return true;
 
+    if (project.members?.some((member) => member._id === user._id || member.id === user._id)) {
+      return true;
+    }
+
     const team = project.assignedTeamId;
     if (!team) return false;
     const isLead = team.leadUserId?._id === user._id || team.leadUserId?.id === user._id;

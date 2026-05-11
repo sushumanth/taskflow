@@ -55,13 +55,13 @@ const attachProjectProgress = async (projects: any[]) => {
 
   return projects.map((project) => {
     const stats = progressMap.get(project._id.toString());
-    const hasManualProgress = Boolean(project.lastUpdateAt);
+    const totalTasks = stats?.totalTasks || 0;
     return {
       ...project.toObject(),
-      progressPercent: hasManualProgress
-        ? Math.round(project.progressPercent || 0)
-        : Math.round(stats?.avgProgress || 0),
-      taskCount: stats?.totalTasks || 0,
+      progressPercent: totalTasks > 0
+        ? Math.round(stats?.avgProgress || 0)
+        : Math.round(project.progressPercent || 0),
+      taskCount: totalTasks,
       completedTasks: stats?.completedTasks || 0,
     };
   });

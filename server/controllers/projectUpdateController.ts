@@ -3,6 +3,8 @@ import Project from '../models/Project.js';
 import ProjectUpdate from '../models/ProjectUpdate.js';
 import ProjectActivityLog from '../models/ProjectActivityLog.js';
 import Team from '../models/Team.js';
+import Notification from '../models/Notification.js';
+import User from '../models/User.js';
 import { AuthRequest } from '../middleware/auth.js';
 
 const canAccessProject = async (projectId: string, userId: string, role?: string) => {
@@ -43,6 +45,37 @@ const createProjectActivity = async (data: {
     type: data.type,
     message: data.message,
   });
+};
+
+const notifyProjectUpdate = async (project: any, actorId: string, note: string) => {
+  const recipientIds = new Set<string>();
+
+  if (project.createdBy) recipientIds.add(project.createdBy.toString());
+
+  if (project.assignedTeamId) {
+    const team = await Team.findById(project.assignedTeamId).select('leadUserId memberUserIds');
+    if (team) {
+      recipientIds.add(team.leadUserId.toString());
+      team.memberUserIds.forEach((id) => recipientIds.add(id.toString()));
+    }
+  }
+
+  const admins = await User.find({ role: 'admin' }).select('_id');
+  admins.forEach((admin) => recipientIds.add(admin._id.toString()));
+
+  recipientIds.delete(actorId);
+  if (recipientIds.size === 0) return;
+
+  const notifications = Array.from(recipientIds).map((user) => ({
+    user,
+    title: 'Project update submitted',
+    message: note.length > 160 ? `${note.slice(0, 157)}...` : note,
+    type: 'project_update' as const,
+    taskId: undefined,
+    updateId: undefined,
+  }));
+
+  await Notification.insertMany(notifications);
 };
 
 export const createProjectUpdate = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -116,6 +149,8 @@ export const createProjectUpdate = async (req: AuthRequest, res: Response): Prom
       type: 'project_update_submitted',
       message: 'Submitted a project update',
     });
+
+    await notifyProjectUpdate(project, userId, String(note).trim());
 
     const populatedUpdate = await ProjectUpdate.findById(update._id)
       .populate('submittedBy', 'name email')

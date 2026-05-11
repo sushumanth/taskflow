@@ -2,6 +2,8 @@ import { Response } from 'express';
 import TeamUpdate from '../models/TeamUpdate.js';
 import Team from '../models/Team.js';
 import TeamActivityLog from '../models/TeamActivityLog.js';
+import Notification from '../models/Notification.js';
+import User from '../models/User.js';
 import { AuthRequest } from '../middleware/auth.js';
 
 const canAccessTeam = async (teamId: string, userId: string, role?: string) => {
@@ -21,6 +23,27 @@ const createTeamActivity = async (teamId: string, actor: string, message: string
     type: 'team_update_submitted',
     message,
   });
+};
+
+const notifyTeamUpdate = async (team: any, actorId: string, note: string) => {
+  const recipientIds = new Set<string>();
+  if (team.leadUserId) recipientIds.add(team.leadUserId.toString());
+  team.memberUserIds?.forEach((id: any) => recipientIds.add(id.toString()));
+
+  const admins = await User.find({ role: 'admin' }).select('_id');
+  admins.forEach((admin) => recipientIds.add(admin._id.toString()));
+
+  recipientIds.delete(actorId);
+  if (recipientIds.size === 0) return;
+
+  const notifications = Array.from(recipientIds).map((user) => ({
+    user,
+    title: 'Team update submitted',
+    message: note.length > 160 ? `${note.slice(0, 157)}...` : note,
+    type: 'team_update' as const,
+  }));
+
+  await Notification.insertMany(notifications);
 };
 
 export const createTeamUpdate = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -85,6 +108,8 @@ export const createTeamUpdate = async (req: AuthRequest, res: Response): Promise
     await team.save();
 
     await createTeamActivity(teamId, userId, 'Submitted a team update');
+
+    await notifyTeamUpdate(team, userId, String(note).trim());
 
     const populatedUpdate = await TeamUpdate.findById(update._id)
       .populate('submittedBy', 'name email')

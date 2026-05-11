@@ -22,12 +22,20 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
     let taskQuery: any = {};
     let projectQuery: any = {};
 
-    if (userRole !== 'admin') {
-      taskQuery = { assignedTo: userId };
-      projectQuery = { members: { $in: [userId] } };
-    }
-
     const teamIds = userRole === 'admin' ? [] : await getTeamIdsForUser(userId?.toString());
+
+    if (userRole !== 'admin') {
+      taskQuery = {
+        $or: [{ assignedTo: userId }, { assignedTeamId: { $in: teamIds } }],
+      };
+      projectQuery = {
+        $or: [
+          { members: { $in: [userId] } },
+          { createdBy: userId },
+          { assignedTeamId: { $in: teamIds } },
+        ],
+      };
+    }
     const teamTaskQuery =
       userRole === 'admin'
         ? { assignedTeamId: { $ne: null } }

@@ -101,7 +101,7 @@ export default function Tasks() {
       fetchUsers();
       fetchTeams();
     }
-  }, [projectFilter, isAdmin]);
+  }, [projectFilter, statusFilter, isAdmin]);
 
   const fetchTasks = async () => {
     try {
