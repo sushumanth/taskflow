@@ -9,6 +9,7 @@ import Projects from './pages/Projects'
 import ProjectDetails from './pages/ProjectDetails'
 import Tasks from './pages/Tasks'
 import TaskDetails from './pages/TaskDetails'
+import Calendar from './pages/Calendar'
 import Teams from './pages/Teams'
 import TeamDetails from './pages/TeamDetails'
 
@@ -63,6 +64,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <MainLayout>
               <Tasks />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/calendar"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <Calendar />
             </MainLayout>
           </ProtectedRoute>
         }

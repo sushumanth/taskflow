@@ -18,7 +18,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { Link } from 'react-router';
-import { format } from 'date-fns';
+import { format, isToday, isWithinInterval, addDays, startOfDay } from 'date-fns';
 
 export default function Dashboard() {
   const { isAdmin } = useAuth();
@@ -168,6 +168,13 @@ export default function Dashboard() {
     }
   };
 
+  const todayTasks = upcomingTasks.filter((task) => isToday(new Date(task.dueDate)));
+  const weekWindowStart = startOfDay(new Date());
+  const weekWindowEnd = addDays(weekWindowStart, 7);
+  const weekTasks = upcomingTasks.filter((task) =>
+    isWithinInterval(new Date(task.dueDate), { start: weekWindowStart, end: weekWindowEnd })
+  );
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -285,6 +292,145 @@ export default function Dashboard() {
             ) : (
               <div className="space-y-3">
                 {upcomingTasks.map((task) => (
+                  <div
+                    key={task._id}
+                    className="flex items-center justify-between rounded-lg border p-3 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-gray-900 dark:text-white">
+                        {task.title}
+                      </p>
+                      <div className="flex items-center gap-1 text-sm text-gray-500">
+                        <Calendar className="h-3 w-3" />
+                        {format(new Date(task.dueDate), 'MMM dd, yyyy')}
+                      </div>
+                    </div>
+                    <div className="ml-4 shrink-0">{getStatusBadge(task.status)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Calendar Snapshot */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Calendar Snapshot</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Today and this week at a glance
+            </p>
+          </div>
+          <Link
+            to="/calendar"
+            className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline"
+          >
+            Open calendar <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs uppercase tracking-wide text-gray-500">Today Due</p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
+                {stats?.todayDueTasks ?? todayTasks.length}
+              </p>
+              <p className="text-xs text-gray-500">Tasks scheduled today</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs uppercase tracking-wide text-gray-500">Pending Reviews</p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
+                {stats?.todayPendingReviews ?? stats?.pendingReviews ?? 0}
+              </p>
+              <p className="text-xs text-gray-500">Needs approval today</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs uppercase tracking-wide text-gray-500">Overdue Work</p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
+                {stats?.overdueTasks ?? 0}
+              </p>
+              <p className="text-xs text-gray-500">Late items to recover</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs uppercase tracking-wide text-gray-500">Week Ahead</p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
+                {stats?.weekDueTasks ?? weekTasks.length}
+              </p>
+              <p className="text-xs text-gray-500">Deadlines in 7 days</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Today + Week schedule */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <div>
+              <CardTitle className="text-lg">Today's Schedule</CardTitle>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Due today</p>
+            </div>
+            <Link
+              to="/calendar"
+              className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline"
+            >
+              View day <ArrowRight className="h-4 w-4" />
+            </Link>
+          </CardHeader>
+          <CardContent>
+            {todayTasks.length === 0 ? (
+              <p className="py-4 text-center text-sm text-gray-500">No tasks due today</p>
+            ) : (
+              <div className="space-y-3">
+                {todayTasks.map((task) => (
+                  <div
+                    key={task._id}
+                    className="flex items-center justify-between rounded-lg border p-3 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-gray-900 dark:text-white">
+                        {task.title}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {task.projectId?.name || 'No project'}
+                      </p>
+                    </div>
+                    <div className="ml-4 shrink-0">{getStatusBadge(task.status)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <div>
+              <CardTitle className="text-lg">Weekly Timeline</CardTitle>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Next seven days</p>
+            </div>
+            <Link
+              to="/calendar"
+              className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline"
+            >
+              View week <ArrowRight className="h-4 w-4" />
+            </Link>
+          </CardHeader>
+          <CardContent>
+            {weekTasks.length === 0 ? (
+              <p className="py-4 text-center text-sm text-gray-500">No upcoming work</p>
+            ) : (
+              <div className="space-y-3">
+                {weekTasks.map((task) => (
                   <div
                     key={task._id}
                     className="flex items-center justify-between rounded-lg border p-3 hover:bg-gray-50 dark:hover:bg-gray-800"

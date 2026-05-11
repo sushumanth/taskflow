@@ -10,7 +10,12 @@ export type NotificationType =
   | 'update_approved'
   | 'update_rejected'
   | 'feedback'
-  | 'changes_requested';
+  | 'changes_requested'
+  | 'calendar_reminder'
+  | 'meeting_reminder'
+  | 'milestone_reminder'
+  | 'review_reminder'
+  | 'overdue_alert';
 
 export interface INotification extends Document {
   user: mongoose.Types.ObjectId;
@@ -56,6 +61,11 @@ const NotificationSchema: Schema = new Schema(
         'update_rejected',
         'feedback',
         'changes_requested',
+        'calendar_reminder',
+        'meeting_reminder',
+        'milestone_reminder',
+        'review_reminder',
+        'overdue_alert',
       ],
       required: [true, 'Notification type is required'],
     },

@@ -6,6 +6,7 @@ import {
   FolderKanban,
   ListTodo,
   Users,
+  Calendar,
   LogOut,
   Menu,
   X,
@@ -25,6 +26,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/projects', label: 'Projects', icon: FolderKanban },
     { path: '/tasks', label: 'Tasks', icon: ListTodo },
+    { path: '/calendar', label: 'Calendar', icon: Calendar },
     { path: '/teams', label: 'Teams', icon: Users },
   ];
 

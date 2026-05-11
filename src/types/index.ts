@@ -99,12 +99,63 @@ export interface Notification {
     | 'update_approved'
     | 'update_rejected'
     | 'feedback'
-    | 'changes_requested';
+    | 'changes_requested'
+    | 'calendar_reminder'
+    | 'meeting_reminder'
+    | 'milestone_reminder'
+    | 'review_reminder'
+    | 'overdue_alert';
   taskId?: string;
   updateId?: string;
   isRead: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export type CalendarEventType =
+  | 'task_deadline'
+  | 'project_deadline'
+  | 'review_pending'
+  | 'overdue_task'
+  | 'meeting'
+  | 'follow_up'
+  | 'milestone'
+  | 'custom';
+
+export type CalendarEventSource = 'system' | 'custom';
+
+export interface CalendarRecurrence {
+  frequency: 'daily' | 'weekly' | 'monthly';
+  interval?: number;
+  byWeekday?: number[];
+  until?: string;
+  count?: number;
+}
+
+export interface CalendarEvent {
+  _id: string;
+  title: string;
+  description?: string;
+  type: CalendarEventType;
+  source: CalendarEventSource;
+  startAt: string;
+  endAt?: string;
+  allDay?: boolean;
+  timezone?: string;
+  status?: string;
+  priority?: 'low' | 'medium' | 'high' | 'critical';
+  progressPercent?: number;
+  project?: { _id: string; name: string };
+  task?: { _id: string; title: string; status?: TaskStatus };
+  team?: { _id: string; name: string };
+  assignee?: User;
+  assignedTeam?: Team;
+  reviewStatus?: ReviewStatus;
+  isOverdue?: boolean;
+  teamAssignment?: TeamAssignment;
+  recurrence?: CalendarRecurrence;
+  createdBy?: User;
+  recurrenceId?: string;
 }
 
 export interface TeamAssignment {
@@ -223,6 +274,9 @@ export interface DashboardStats {
   teamAssignedTasks?: number;
   teamCompletionRate?: number;
   teamsNeedingAttention?: number;
+  todayDueTasks?: number;
+  weekDueTasks?: number;
+  todayPendingReviews?: number;
 }
 
 export interface ApiResponse<T> {
@@ -247,6 +301,8 @@ export interface ApiResponse<T> {
   updates?: TaskUpdate[];
   notification?: Notification;
   notifications?: Notification[];
+  event?: CalendarEvent;
+  events?: CalendarEvent[];
   stats?: DashboardStats;
   recentTasks?: Task[];
   upcomingTasks?: Task[];

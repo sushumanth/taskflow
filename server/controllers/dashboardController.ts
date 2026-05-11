@@ -18,6 +18,9 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
     const userId = req.user?._id;
     const userRole = req.user?.role;
     const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+    const weekEnd = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000);
 
     let taskQuery: any = {};
     let projectQuery: any = {};
@@ -57,6 +60,9 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
       pendingReviewsAgg,
       tasksNeedingAttention,
       progressAgg,
+      todayDueTasks,
+      weekDueTasks,
+      todayPendingReviewsAgg,
       totalTeams,
       activeTeams,
       teamTaskTotals,
@@ -90,6 +96,21 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
       Task.aggregate([
         { $match: taskQuery },
         { $group: { _id: null, avgProgress: { $avg: '$progressPercent' } } },
+      ]),
+      Task.countDocuments({
+        ...taskQuery,
+        status: { $ne: 'done' },
+        dueDate: { $gte: todayStart, $lte: todayEnd },
+      }),
+      Task.countDocuments({
+        ...taskQuery,
+        status: { $ne: 'done' },
+        dueDate: { $gte: todayStart, $lte: weekEnd },
+      }),
+      TaskUpdate.aggregate([
+        { $match: pendingReviewMatch },
+        { $match: { createdAt: { $gte: todayStart, $lte: todayEnd } } },
+        { $count: 'count' },
       ]),
       Team.countDocuments(userRole === 'admin' ? {} : { _id: { $in: teamIds } }),
       Team.countDocuments(
@@ -128,6 +149,7 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
 
     const overallProgress = Math.round(progressAgg?.[0]?.avgProgress || 0);
     const pendingReviews = pendingReviewsAgg?.[0]?.count || 0;
+    const todayPendingReviews = todayPendingReviewsAgg?.[0]?.count || 0;
     const teamAssignedTasks = teamTaskTotals?.[0]?.total || 0;
     const teamCompletionRate = teamAssignedTasks
       ? Math.round(((teamTaskTotals?.[0]?.completed || 0) / teamAssignedTasks) * 100)
@@ -163,6 +185,9 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
         pendingReviews,
         tasksNeedingAttention,
         overallProgress,
+        todayDueTasks,
+        weekDueTasks,
+        todayPendingReviews,
         totalTeams,
         activeTeams,
         teamAssignedTasks,

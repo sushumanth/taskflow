@@ -13,6 +13,7 @@ import notificationRoutes from './routes/notifications.js';
 import teamRoutes from './routes/teams.js';
 import teamUpdateRoutes from './routes/teamUpdates.js';
 import projectUpdateRoutes from './routes/projectUpdates.js';
+import calendarRoutes from './routes/calendar.js';
 
 const app = express();
 
@@ -35,6 +36,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/teams', teamRoutes);
 app.use('/api/team-updates', teamUpdateRoutes);
 app.use('/api/project-updates', projectUpdateRoutes);
+app.use('/api/calendar', calendarRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

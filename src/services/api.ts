@@ -16,6 +16,8 @@ import type {
   TeamAssignment,
   ProjectUpdate,
   ProjectActivity,
+  CalendarEvent,
+  CalendarRecurrence,
 } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -243,6 +245,81 @@ export const markAllNotificationsRead = async (): Promise<ApiResponse<void>> => 
 // Dashboard
 export const getDashboardStats = async (): Promise<ApiResponse<{ stats: DashboardStats; recentTasks: Task[]; upcomingTasks: Task[] }>> => {
   const response = await api.get('/dashboard/stats');
+  return response.data;
+};
+
+// Calendar
+export const getCalendarEvents = async (params: {
+  start: string;
+  end: string;
+  projectId?: string;
+  teamId?: string;
+  assigneeId?: string;
+  priority?: string;
+  status?: string;
+  type?: string;
+  source?: string;
+  overdue?: boolean;
+  reviewStatus?: string;
+}): Promise<ApiResponse<{ events: CalendarEvent[] }>> => {
+  const response = await api.get('/calendar/events', { params });
+  return response.data;
+};
+
+export const createCalendarEvent = async (data: {
+  title: string;
+  description?: string;
+  type?: string;
+  startAt: string;
+  endAt?: string;
+  allDay?: boolean;
+  timezone?: string;
+  location?: string;
+  status?: string;
+  priority?: string;
+  participants?: string[];
+  projectId?: string;
+  taskId?: string;
+  teamId?: string;
+  reminderMinutes?: number[];
+  recurrence?: CalendarRecurrence;
+}): Promise<ApiResponse<{ event: CalendarEvent }>> => {
+  const response = await api.post('/calendar/events', data);
+  return response.data;
+};
+
+export const updateCalendarEvent = async (id: string, data: Partial<{
+  title: string;
+  description: string;
+  type: string;
+  startAt: string;
+  endAt: string;
+  allDay: boolean;
+  timezone: string;
+  location: string;
+  status: string;
+  priority: string;
+  participants: string[];
+  projectId: string;
+  taskId: string;
+  teamId: string;
+  reminderMinutes: number[];
+  recurrence: CalendarRecurrence;
+}>): Promise<ApiResponse<{ event: CalendarEvent }>> => {
+  const response = await api.put(`/calendar/events/${id}`, data);
+  return response.data;
+};
+
+export const rescheduleCalendarEvent = async (
+  id: string,
+  data: { startAt: string; endAt?: string }
+): Promise<ApiResponse<{ event: CalendarEvent }>> => {
+  const response = await api.patch(`/calendar/events/${id}/reschedule`, data);
+  return response.data;
+};
+
+export const deleteCalendarEvent = async (id: string): Promise<ApiResponse<void>> => {
+  const response = await api.delete(`/calendar/events/${id}`);
   return response.data;
 };
 
