@@ -1,9 +1,16 @@
 import dotenv from 'dotenv';
+import fs from 'fs';
 import path from 'path';
 
-// Load .env from project root (works both in dev and production)
-const envPath = path.join(process.cwd(), 'server', '.env');
-dotenv.config({ path: envPath });
+// Load .env from common locations so dev/prod and varying CWDs work reliably.
+const envCandidates = [
+  path.join(process.cwd(), 'server', '.env'),
+  path.join(process.cwd(), '.env'),
+  path.join(process.cwd(), '..', 'server', '.env'),
+];
+
+const envPath = envCandidates.find((candidate) => fs.existsSync(candidate));
+dotenv.config(envPath ? { path: envPath } : undefined);
 
 export const config = {
   PORT: process.env.PORT || 5000,
