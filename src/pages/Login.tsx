@@ -41,8 +41,8 @@ export default function Login() {
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 dark:bg-gray-900">
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="space-y-1 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-white mb-2">
-            <Shield className="h-7 w-7" />
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-white mb-2">
+            <img src="/src/public/taskforge.png" alt="TaskForge Logo" className="h-12 w-12" />
           </div>
           <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
           <CardDescription>Sign in to your TaskForge account</CardDescription>

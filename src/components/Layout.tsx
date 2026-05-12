@@ -52,8 +52,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           {/* Logo */}
           <div className="flex items-center justify-between border-b px-6 py-4">
             <Link to="/dashboard" className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white">
-                <Shield className="h-5 w-5" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+                <img src="/src/public/taskforge.png" alt="TaskForge Logo" className="h-8 w-10" />
               </div>
               <span className="text-lg font-bold text-gray-900 dark:text-white">TaskForge</span>
             </Link>

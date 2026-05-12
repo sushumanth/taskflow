@@ -53,6 +53,7 @@ import {
   CircleDot,
   Pencil,
   Trash2,
+  Plus,
 } from 'lucide-react';
 import { Link } from 'react-router';
 
@@ -68,6 +69,18 @@ type CalendarFilters = {
   status: string;
   type: string;
   overdue: boolean;
+};
+
+const initialCreateForm = {
+  title: '',
+  type: 'meeting',
+  startAt: '',
+  endAt: '',
+  allDay: false,
+  projectId: 'none',
+  teamId: 'none',
+  assigneeId: 'none',
+  priority: 'medium',
 };
 
 const eventStyles: Record<string, { label: string; icon: any; tone: string; ring: string }> = {
@@ -143,6 +156,19 @@ const toLocalInputValue = (value?: string) => {
   return local.toISOString().slice(0, 16);
 };
 
+const toLocalInputValueFromDate = (date: Date) => {
+  const offset = date.getTimezoneOffset();
+  const local = new Date(date.getTime() - offset * 60000);
+  return local.toISOString().slice(0, 16);
+};
+
+const toIsoFromLocalInput = (value?: string) => {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date.toISOString();
+};
+
 const getRangeLabel = (view: CalendarView, date: Date) => {
   if (view === 'month') return format(date, 'MMMM yyyy');
   if (view === 'day') return format(date, 'MMMM dd, yyyy');
@@ -183,17 +209,7 @@ export default function Calendar() {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [draggedEvent, setDraggedEvent] = useState<CalendarEvent | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [createForm, setCreateForm] = useState({
-    title: '',
-    type: 'meeting',
-    startAt: '',
-    endAt: '',
-    allDay: false,
-    projectId: 'none',
-    teamId: 'none',
-    assigneeId: 'none',
-    priority: 'medium',
-  });
+  const [createForm, setCreateForm] = useState(initialCreateForm);
 
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -217,6 +233,25 @@ export default function Calendar() {
     if (filters.type !== 'all') params.type = filters.type;
     if (filters.overdue) params.overdue = true;
     return params;
+  };
+
+  const handleOpenCreate = (date?: Date, allDay = false) => {
+    if (!isAdmin) return;
+    const base = date ? new Date(date) : new Date();
+    if (date) {
+      base.setHours(9, 0, 0, 0);
+    } else {
+      base.setMinutes(0, 0, 0);
+      base.setHours(base.getHours() + 1);
+    }
+    const end = new Date(base.getTime() + 60 * 60 * 1000);
+    setCreateForm({
+      ...initialCreateForm,
+      startAt: toLocalInputValueFromDate(base),
+      endAt: allDay ? '' : toLocalInputValueFromDate(end),
+      allDay,
+    });
+    setCreateOpen(true);
   };
 
   const range = useMemo(() => {
@@ -344,12 +379,19 @@ export default function Calendar() {
       return;
     }
 
+    const startAt = toIsoFromLocalInput(createForm.startAt);
+    if (!startAt) {
+      toast.error('Start time is invalid');
+      return;
+    }
+    const endAt = createForm.allDay ? undefined : toIsoFromLocalInput(createForm.endAt);
+
     try {
       const response = await createCalendarEvent({
         title: createForm.title,
         type: createForm.type,
-        startAt: createForm.startAt,
-        endAt: createForm.endAt || undefined,
+        startAt,
+        endAt,
         allDay: createForm.allDay,
         projectId: createForm.projectId !== 'none' ? createForm.projectId : undefined,
         teamId: createForm.teamId !== 'none' ? createForm.teamId : undefined,
@@ -361,17 +403,7 @@ export default function Calendar() {
       if (response.success) {
         toast.success('Event created');
         setCreateOpen(false);
-        setCreateForm({
-          title: '',
-          type: 'meeting',
-          startAt: '',
-          endAt: '',
-          allDay: false,
-          projectId: 'none',
-          teamId: 'none',
-          assigneeId: 'none',
-          priority: 'medium',
-        });
+        setCreateForm(initialCreateForm);
         const refreshed = await getCalendarEvents(buildQueryParams());
         if (refreshed.success) setEvents(refreshed.events || []);
       }
@@ -427,12 +459,18 @@ export default function Calendar() {
 
   const handleEditEvent = async () => {
     if (!selectedEvent) return;
+    const startAt = toIsoFromLocalInput(editForm.startAt);
+    if (!startAt) {
+      toast.error('Start time is invalid');
+      return;
+    }
+    const endAt = editForm.allDay ? undefined : toIsoFromLocalInput(editForm.endAt);
     try {
       const response = await updateCalendarEvent(selectedEvent._id, {
         title: editForm.title,
         description: editForm.description,
-        startAt: editForm.startAt,
-        endAt: editForm.endAt || undefined,
+        startAt,
+        endAt,
         allDay: editForm.allDay,
       });
       if (response.success) {
@@ -462,7 +500,7 @@ export default function Calendar() {
   const renderMonthView = () => (
     <div className="grid grid-cols-7 gap-px rounded-xl border bg-white/80 p-2 shadow-sm">
       {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
-        <div key={day} className="px-2 py-2 text-xs font-semibold text-slate-500">
+        <div key={day} className="px-1 py-1 text-[10px] font-semibold text-slate-500">
           {day}
         </div>
       ))}
@@ -470,21 +508,36 @@ export default function Calendar() {
         const key = format(day, 'yyyy-MM-dd');
         const dayEvents = eventsByDay.get(key) || [];
         const isCurrentMonth = isSameMonth(day, currentDate);
+        const isCurrentDay = isToday(day);
         return (
           <div
             key={key}
-            className={`group min-h-[140px] space-y-2 rounded-lg border bg-white/70 p-2 transition hover:shadow-md ${
+            className={`group min-h-[90px] space-y-1 rounded-lg border bg-white/70 p-2 transition hover:shadow-md ${
               isCurrentMonth ? '' : 'bg-slate-50 text-slate-400'
-            } ${isToday(day) ? 'ring-1 ring-emerald-200' : ''}`}
+            } ${isCurrentDay ? 'border-emerald-200 bg-emerald-50/60 ring-1 ring-emerald-200/80 shadow-sm' : ''}`}
             onDragOver={(event) => event.preventDefault()}
             onDrop={() => {
               if (draggedEvent) {
                 handleReschedule(draggedEvent, day);
               }
             }}
+            onDoubleClick={(event) => {
+              if (!isAdmin) return;
+              const target = event.target as HTMLElement;
+              if (target.closest('button')) return;
+              handleOpenCreate(day, true);
+            }}
           >
             <div className="flex items-center justify-between text-xs">
-              <span className={`font-semibold ${isCurrentMonth ? 'text-slate-700' : 'text-slate-400'}`}>
+              <span
+                className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold ${
+                  isCurrentDay
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : isCurrentMonth
+                      ? 'text-slate-700'
+                      : 'text-slate-400'
+                }`}
+              >
                 {format(day, 'd')}
               </span>
               {dayEvents.length > 3 && (
@@ -523,11 +576,18 @@ export default function Calendar() {
       {days.map((day) => {
         const key = format(day, 'yyyy-MM-dd');
         const dayEvents = eventsByDay.get(key) || [];
+        const isCurrentDay = isToday(day);
         return (
-          <Card key={key} className="border-slate-200/80">
+          <Card
+            key={key}
+            className={`border-slate-200/80 ${isCurrentDay ? 'border-emerald-200 bg-emerald-50/40 ring-1 ring-emerald-200/70' : ''}`}
+          >
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-slate-600">
-                {format(day, 'EEE')}<span className="ml-2 text-slate-400">{format(day, 'dd')}</span>
+              <CardTitle className={`text-sm ${isCurrentDay ? 'text-emerald-700' : 'text-slate-600'}`}>
+                {format(day, 'EEE')}
+                <span className={`ml-2 ${isCurrentDay ? 'text-emerald-500' : 'text-slate-400'}`}>
+                  {format(day, 'dd')}
+                </span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
@@ -693,36 +753,20 @@ export default function Calendar() {
   };
 
   return (
-    <div className="font-calendar space-y-6">
-      <div className="calendar-glow rounded-3xl border bg-white/70 p-6 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Time Intelligence Center</p>
-            <h1 className="mt-2 text-3xl font-semibold text-slate-900">Calendar Command</h1>
-            <p className="text-sm text-slate-500">Track deadlines, reviews, and team momentum in one view.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button variant="outline" onClick={() => handleNavigate('today')} className="gap-2">
-              <CalendarIcon className="h-4 w-4" />
-              Today
-            </Button>
-            {isAdmin && (
-              <Button onClick={() => setCreateOpen(true)} className="gap-2">
-                <Sparkles className="h-4 w-4" />
-                New Event
-              </Button>
-            )}
-          </div>
+    <div className="font-calendar space-y-4">
+      {/* <div className="calendar-glow rounded-2xl border bg-white/70 px-2 py-1 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          
         </div>
-      </div>
+      </div> */}
 
-      <div className="grid gap-6 lg:grid-cols-[280px,1fr]">
+      <div className="grid gap-2 lg:grid-cols-[240px,1fr] xl:grid-cols-[260px,1fr]">
         <div className="space-y-4">
           <Card className="border-slate-200/80">
-            <CardHeader>
+            <CardHeader className="pb-2 pt-3">
               <CardTitle className="text-sm text-slate-500">Today at a glance</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-2 pb-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-slate-500">Overdue</span>
                 <span className="font-semibold text-rose-600">{insights.overdue}</span>
@@ -735,19 +779,19 @@ export default function Calendar() {
                 <span className="text-slate-500">Events today</span>
                 <span className="font-semibold text-emerald-600">{insights.todayCount}</span>
               </div>
-              <div className="flex items-center justify-between text-sm">
+              {/* <div className="flex items-center justify-between text-sm">
                 <span className="text-slate-500">Milestones</span>
                 <span className="font-semibold text-sky-600">{insights.milestoneCount}</span>
-              </div>
+              </div> */}
             </CardContent>
           </Card>
 
           <Card className="border-slate-200/80">
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 pt-3">
               <CardTitle className="text-sm text-slate-500">Workload pulse</CardTitle>
               <CircleDot className="h-4 w-4 text-slate-400" />
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-1 pb-2">
               {teamLoad.length === 0 ? (
                 <p className="text-xs text-slate-400">No team load data yet.</p>
               ) : (
@@ -770,11 +814,11 @@ export default function Calendar() {
           </Card>
 
           <Card className="border-slate-200/80">
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-row items-center justify-between pb-1 pt-2">
               <CardTitle className="text-sm text-slate-500">Filters</CardTitle>
               <Filter className="h-4 w-4 text-slate-400" />
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-1 pb-2">
               <Select value={filters.projectId} onValueChange={(value) => setFilters((prev) => ({ ...prev, projectId: value }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Project" />
@@ -812,7 +856,7 @@ export default function Calendar() {
                   </SelectContent>
                 </Select>
               )}
-
+{/* 
               <Select value={filters.type} onValueChange={(value) => setFilters((prev) => ({ ...prev, type: value }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Type" />
@@ -826,7 +870,7 @@ export default function Calendar() {
                   <SelectItem value="follow_up">Follow-ups</SelectItem>
                   <SelectItem value="custom">Custom</SelectItem>
                 </SelectContent>
-              </Select>
+              </Select> */}
 
               <Select value={filters.priority} onValueChange={(value) => setFilters((prev) => ({ ...prev, priority: value }))}>
                 <SelectTrigger>
@@ -841,7 +885,7 @@ export default function Calendar() {
                 </SelectContent>
               </Select>
 
-              <Select value={filters.status} onValueChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}>
+              {/* <Select value={filters.status} onValueChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
@@ -853,9 +897,9 @@ export default function Calendar() {
                   <SelectItem value="done">Done</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
                 </SelectContent>
-              </Select>
+              </Select> */}
 
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-500">
+              <div className="flex items-center justify-between rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-500">
                 <span>Show overdue only</span>
                 <input
                   type="checkbox"
@@ -869,28 +913,36 @@ export default function Calendar() {
 
         <div className="space-y-4">
           <Card className="border-slate-200/80">
-            <CardContent className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
+            <CardContent className="flex flex-col gap-1 p-2 md:flex-row md:items-center md:justify-between">
               <div className="flex items-center gap-3">
                 <Button variant="outline" size="icon" onClick={() => handleNavigate('prev')}>
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <div>
                   <p className="text-sm text-slate-500">{getRangeLabel(view, currentDate)}</p>
-                  <p className="text-xs text-slate-400">Plan, review, deliver</p>
+                  <p className="text-[10px] text-slate-400">Plan, review, deliver</p>
                 </div>
                 <Button variant="outline" size="icon" onClick={() => handleNavigate('next')}>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
-              <Tabs value={view} onValueChange={(value) => setView(value as CalendarView)}>
-                <TabsList>
-                  {viewOptions.map((option) => (
-                    <TabsTrigger key={option} value={option}>
-                      {option.charAt(0).toUpperCase() + option.slice(1)}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </Tabs>
+              <div className="flex flex-wrap items-center gap-2">
+                <Tabs value={view} onValueChange={(value) => setView(value as CalendarView)}>
+                  <TabsList>
+                    {viewOptions.map((option) => (
+                      <TabsTrigger key={option} value={option}>
+                        {option.charAt(0).toUpperCase() + option.slice(1)}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </Tabs>
+                {isAdmin && (
+                  <Button size="sm" onClick={() => handleOpenCreate()} className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    New event
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
 
